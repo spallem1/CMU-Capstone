@@ -39,10 +39,8 @@ Once you have the normalized file path(s), spawn these two sub-agents **in paral
 - `top_k`: 5 (default)
 
 **Historical Context Analyst Agent** — pass:
-- `permissions`: the raw snapshot JSON from Step 1
+- `normalized_file`: same path as above — the agent reads permission entries from it
 - `scope`: the original scope
-- `lookback_days`: 90 (default, adjust if user specifies)
-- `log_hints`: any log paths the user mentioned
 
 ### Step 3 — Synthesize and report
 
@@ -71,8 +69,10 @@ findings files if the sub-agents returned file paths rather than inline JSON.
 ### Downgraded Permissions
 <findings where reclassification.direction == "downgraded" — vendor was conservative; include justification.>
 
-### Historical Usage Context
-<findings from Historical Context Analyst Agent>
+### Historical Analyst Precedents
+<findings from Historical Context Analyst Agent — for each permission with precedents,
+ show: consensus rating, number of past decisions, override direction, and key rationale.
+ For permissions without precedents, note "No historical decisions found.">
 
 ### Prioritised Recommendations
 <merged, deduplicated, risk-ranked action list from both agents>
@@ -93,6 +93,7 @@ For the Policy-Driven Reclassification Agent specifically, pass the normalized f
 ## Rules
 - Never skip a sub-agent step even if the previous output looks sufficient on its own.
 - If a sub-agent returns an error, report it in the synthesis under an "Errors & Gaps" section and continue with available data.
-- If the Permission Collector produces multiple normalized files (multiple source files), spawn one Policy-Driven Reclassification Agent invocation per normalized file, all in parallel.
+- If the Permission Collector produces multiple normalized files (multiple source files), spawn one Policy-Driven Reclassification Agent invocation per normalized file, all in parallel. Pass the same normalized file to the Historical Context Analyst for each.
 - Keep your own output terse; the report is the deliverable, not your narration.
 - The reclassification summary (upgrades / downgrades / unchanged counts) must appear in the Executive Summary.
+- After the report is written, remind the analyst they can run `/paa-record-decision` to capture their final decisions and feed them back into the historical decision store for future analyses.

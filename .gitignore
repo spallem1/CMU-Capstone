@@ -4,8 +4,9 @@ permission-collector/snapshots/
 policy-reclassification/findings/
 historical-context-analyst/analysis/
 
-# RAG vector store (rebuilt by indexer.py)
+# RAG vector stores (rebuilt by indexer.py)
 policy-reclassification/vector_store/
+historical-context-analyst/vector_store/
 
 # Python
 __pycache__/

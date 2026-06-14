@@ -1,0 +1,119 @@
+{
+  "batch_id": "aws-iam-2026-01",
+  "source_type": "aws_iam",
+  "review_scope": "aws:account/123456789012 — S3 and IAM permissions review",
+  "created_at": "2026-01-15T14:30:00Z",
+  "decisions": [
+    {
+      "decision_id": "dec-aws-001",
+      "decided_at": "2026-01-15T14:30:00Z",
+      "analyst": "john.smith@example.com",
+      "permission_pattern": {
+        "source_type": "aws_iam",
+        "actions": ["s3:PutBucketPolicy"],
+        "principal_type": "role",
+        "scope_level": "resource",
+        "manages_user_permissions": true,
+        "effect": "allow",
+        "action_type": {
+          "write": true,
+          "manage_permissions": true,
+          "storage": true
+        }
+      },
+      "vendor_rating": "HIGH",
+      "policy_severity": "CRITICAL",
+      "analyst_final_rating": "CRITICAL",
+      "override_direction": "confirmed",
+      "rationale": "PutBucketPolicy can make a bucket publicly accessible or grant cross-account access with a single API call, regardless of whether the resource is a named bucket. The blast radius is account-wide because the policy controls who accesses all objects in the bucket. Confirmed CRITICAL even though resource is scoped.",
+      "compensating_controls": [
+        "Require MFA for all sessions that assume this role",
+        "Enable S3 Block Public Access at the account level",
+        "Alert on PutBucketPolicy calls via CloudTrail + EventBridge"
+      ]
+    },
+    {
+      "decision_id": "dec-aws-002",
+      "decided_at": "2026-01-15T15:05:00Z",
+      "analyst": "john.smith@example.com",
+      "permission_pattern": {
+        "source_type": "aws_iam",
+        "actions": ["s3:PutBucketAcl"],
+        "principal_type": "role",
+        "scope_level": "resource",
+        "manages_user_permissions": true,
+        "effect": "allow",
+        "action_type": {
+          "write": true,
+          "manage_permissions": true,
+          "storage": true
+        }
+      },
+      "vendor_rating": "HIGH",
+      "policy_severity": "CRITICAL",
+      "analyst_final_rating": "CRITICAL",
+      "override_direction": "confirmed",
+      "rationale": "PutBucketAcl can expose a bucket publicly or to unintended external principals. While S3 Block Public Access mitigates the public exposure risk, cross-account ACL grants remain possible. Treat as CRITICAL consistently and require compensating controls.",
+      "compensating_controls": [
+        "Enforce S3 Block Public Access via AWS Organizations SCP",
+        "Pair with SCPs that deny s3:PutBucketAcl when the ACL grants external principals",
+        "CloudTrail alert on PutBucketAcl outside approved maintenance windows"
+      ]
+    },
+    {
+      "decision_id": "dec-aws-003",
+      "decided_at": "2026-01-15T15:40:00Z",
+      "analyst": "john.smith@example.com",
+      "permission_pattern": {
+        "source_type": "aws_iam",
+        "actions": ["s3:DeleteObject"],
+        "principal_type": "role",
+        "scope_level": "resource",
+        "manages_user_permissions": false,
+        "effect": "allow",
+        "action_type": {
+          "delete": true,
+          "storage": true,
+          "data_plane": true
+        }
+      },
+      "vendor_rating": "MEDIUM",
+      "policy_severity": "MEDIUM",
+      "analyst_final_rating": "LOW",
+      "override_direction": "downgrade",
+      "rationale": "DeleteObject scoped to a named bucket with S3 Versioning and MFA Delete enabled reduces the effective risk: deleted objects are soft-deleted and recoverable. CleanupLambdaRole is a time-limited automated role with no interactive access. Downgraded to LOW given these compensating controls are verified in place.",
+      "compensating_controls": [
+        "Verify S3 Versioning is enabled on target bucket",
+        "Verify MFA Delete is enabled",
+        "Restrict role to Lambda execution only (no console/CLI assume)"
+      ]
+    },
+    {
+      "decision_id": "dec-aws-004",
+      "decided_at": "2026-01-15T16:10:00Z",
+      "analyst": "sarah.jones@example.com",
+      "permission_pattern": {
+        "source_type": "aws_iam",
+        "actions": ["s3:ListAllMyBuckets"],
+        "principal_type": "role",
+        "scope_level": "account",
+        "manages_user_permissions": false,
+        "effect": "allow",
+        "action_type": {
+          "read": true,
+          "storage": true
+        }
+      },
+      "vendor_rating": "MEDIUM",
+      "policy_severity": "HIGH",
+      "analyst_final_rating": "MEDIUM",
+      "override_direction": "accepted",
+      "rationale": "Policy flagged HIGH due to ZTA standing-access rule (no time-bound condition). However, ListAllMyBuckets is read-only enumeration — it reveals bucket names but cannot access objects. AuditRole is a named, documented role with restricted trust policy. Accepted vendor MEDIUM; added monitoring requirement rather than revocation.",
+      "compensating_controls": [
+        "Ensure AuditRole trust policy restricts to approved audit principals only",
+        "CloudTrail alert if ListAllMyBuckets is called outside scheduled audit windows",
+        "Consider converting to JIT access via AWS SSO for future reviews"
+      ]
+    }
+  ]
+}

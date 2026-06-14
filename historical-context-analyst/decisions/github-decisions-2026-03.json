@@ -1,0 +1,88 @@
+{
+  "batch_id": "github-2026-03",
+  "source_type": "github",
+  "review_scope": "github:org/example-corp — repository and org-level permissions review",
+  "created_at": "2026-03-20T10:00:00Z",
+  "decisions": [
+    {
+      "decision_id": "dec-gh-001",
+      "decided_at": "2026-03-20T10:00:00Z",
+      "analyst": "sarah.jones@example.com",
+      "permission_pattern": {
+        "source_type": "github",
+        "actions": ["admin:org"],
+        "principal_type": "user",
+        "scope_level": "org",
+        "manages_user_permissions": true,
+        "effect": "allow",
+        "action_type": {
+          "admin": true,
+          "manage_permissions": true
+        }
+      },
+      "vendor_rating": "CRITICAL",
+      "policy_severity": "CRITICAL",
+      "analyst_final_rating": "CRITICAL",
+      "override_direction": "confirmed",
+      "rationale": "Org admin grants full control over all repositories, members, billing, and security settings. No business case justifies persistent standing org-admin for individual user accounts. Confirmed CRITICAL; recommended migration to team-maintainer roles with org-admin available only via JIT.",
+      "compensating_controls": [
+        "Revoke standing org-admin; grant via JIT approval workflow only",
+        "Require GitHub org owner MFA enforcement policy",
+        "Audit org-admin grants monthly via GitHub audit log API"
+      ]
+    },
+    {
+      "decision_id": "dec-gh-002",
+      "decided_at": "2026-03-20T11:15:00Z",
+      "analyst": "sarah.jones@example.com",
+      "permission_pattern": {
+        "source_type": "github",
+        "actions": ["repo:write"],
+        "principal_type": "user",
+        "scope_level": "resource",
+        "manages_user_permissions": false,
+        "effect": "allow",
+        "action_type": {
+          "write": true
+        }
+      },
+      "vendor_rating": "MEDIUM",
+      "policy_severity": "MEDIUM",
+      "analyst_final_rating": "MEDIUM",
+      "override_direction": "confirmed",
+      "rationale": "Write access to a named repository is expected for contributors. MEDIUM is appropriate when the repository contains application code but not secrets or regulated data. Confirmed; no override needed.",
+      "compensating_controls": [
+        "Require branch protection rules on main/master",
+        "Enforce signed commits policy",
+        "Enable secret scanning on the repository"
+      ]
+    },
+    {
+      "decision_id": "dec-gh-003",
+      "decided_at": "2026-03-20T12:00:00Z",
+      "analyst": "mike.chen@example.com",
+      "permission_pattern": {
+        "source_type": "github",
+        "actions": ["admin:repo_hook"],
+        "principal_type": "user",
+        "scope_level": "resource",
+        "manages_user_permissions": false,
+        "effect": "allow",
+        "action_type": {
+          "admin": true,
+          "write": true
+        }
+      },
+      "vendor_rating": "MEDIUM",
+      "policy_severity": "HIGH",
+      "analyst_final_rating": "HIGH",
+      "override_direction": "confirmed",
+      "rationale": "Webhook admin grants the ability to register arbitrary HTTP endpoints that receive repository events including code, PR content, and secrets accidentally committed. A malicious or compromised webhook can exfiltrate sensitive data. Policy HIGH is correct; vendor MEDIUM underestimates exfiltration risk.",
+      "compensating_controls": [
+        "Maintain an allowlist of approved webhook URLs via org policy",
+        "Alert on new webhook registrations via GitHub audit log",
+        "Rotate any secrets exposed in webhook payloads immediately on detection"
+      ]
+    }
+  ]
+}
