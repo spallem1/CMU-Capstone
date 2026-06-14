@@ -1,0 +1,140 @@
+{
+  "policy_id": "CTRL-PLANE-001",
+  "policy_name": "Control-Plane vs Data-Plane Risk Classification",
+  "version": "1.0",
+  "effective_date": "2026-06-14",
+  "purpose": "Classify any permission that operates on the control plane of a cloud resource as Privileged and Risky. Control-plane actions modify the configuration, existence, or access model of a resource; data-plane actions interact with the content inside a resource. This distinction is foundational to NIST SP 800-207 (Zero Trust) and CSA CCM IAM-03.",
+  "references": [
+    "NIST SP 800-207 Section 3.3 - All data sources and computing services are considered resources",
+    "CSA CCM v4 IAM-03 - Privileged Access Management",
+    "CIS Controls v8 Control 5 - Account Management (privileged vs standard)"
+  ],
+  "classification_model": {
+    "privileged": "A permission is Privileged when it grants the ability to create, modify, delete, or reconfigure a resource or its access controls — i.e., it operates on the resource itself rather than its content.",
+    "risky": "A permission is Risky when misuse or compromise could lead to data loss, service disruption, unauthorised access escalation, or lateral movement. All control-plane actions are inherently Risky.",
+    "privileged_and_risky": "When a permission is both Privileged and Risky it requires compensating controls: MFA enforcement, just-in-time access, and separate approval workflow."
+  },
+  "rules": [
+    {
+      "rule_id": "CP-001",
+      "name": "Resource Creation",
+      "classification": "privileged_and_risky",
+      "severity": "HIGH",
+      "description": "Any action that creates a new cloud resource (bucket, VM, role, policy, cluster node) is a control-plane action and is therefore Privileged and Risky.",
+      "triggers": {
+        "action_keywords_any": ["Create", "Provision", "Launch", "Deploy", "Init", "New", "Add", "Register", "Instantiate"],
+        "action_type_any": ["write"],
+        "scope_level_any": ["org", "account", "cluster", "namespace", "resource", "wildcard"]
+      },
+      "rationale": "Creating resources can establish persistent footholds (backdoor roles, rogue buckets, shadow VMs). Even a read-only principal who can create roles can immediately escalate privilege.",
+      "remediation": "Require MFA at time of use; restrict to named principals in a break-glass role; log and alert every invocation.",
+      "compensating_controls": ["mfa_required", "jit_access", "approval_workflow", "audit_logging"]
+    },
+    {
+      "rule_id": "CP-002",
+      "name": "Resource Modification / Update",
+      "classification": "privileged_and_risky",
+      "severity": "HIGH",
+      "description": "Any action that modifies the configuration of an existing resource (update, put, patch, set, modify, replace) is a control-plane action.",
+      "triggers": {
+        "action_keywords_any": ["Update", "Put", "Patch", "Set", "Modify", "Replace", "Configure", "Alter", "Change", "Edit"],
+        "action_type_any": ["write"],
+        "scope_level_any": ["org", "account", "cluster", "namespace", "resource", "wildcard"]
+      },
+      "rationale": "Modifying a resource's configuration can silently disable security controls (e.g., disabling bucket versioning before mass-delete, modifying a firewall rule to open a port).",
+      "remediation": "Enforce change-management approval; alert on configuration drift; use immutable infrastructure where possible.",
+      "compensating_controls": ["change_approval", "config_drift_alert", "audit_logging"]
+    },
+    {
+      "rule_id": "CP-003",
+      "name": "Resource Deletion",
+      "classification": "privileged_and_risky",
+      "severity": "CRITICAL",
+      "description": "Any action that permanently removes a resource or its contents is a control-plane action. Deletion is the highest-impact control-plane verb.",
+      "triggers": {
+        "action_keywords_any": ["Delete", "Remove", "Destroy", "Terminate", "Deregister", "Drop", "Purge", "Revoke", "Detach"],
+        "action_type_any": ["delete"],
+        "scope_level_any": ["org", "account", "cluster", "namespace", "resource", "wildcard"]
+      },
+      "rationale": "Deletion is typically irreversible without a backup strategy. A compromised principal with delete rights can cause permanent data loss or service disruption.",
+      "remediation": "Enable soft-delete / versioning on all critical resources; require dual-control (two approvals) for deletion of production resources; enforce resource lock policies.",
+      "compensating_controls": ["soft_delete_enabled", "resource_lock", "dual_control", "backup_verified"]
+    },
+    {
+      "rule_id": "CP-004",
+      "name": "Access Control / Permission Modification",
+      "classification": "privileged_and_risky",
+      "severity": "CRITICAL",
+      "description": "Any action that creates, modifies, or deletes IAM policies, roles, bindings, ACLs, or trust relationships is a control-plane action and is the highest-risk category because it directly affects the permission boundary of other principals.",
+      "triggers": {
+        "action_type_any": ["manage_permissions", "admin"],
+        "action_keywords_any": ["PutBucketPolicy", "PutBucketAcl", "AttachRolePolicy", "CreateRole", "BindRole", "RoleBinding", "ClusterRoleBinding", "PutBucketPublicAccessBlock", "SetIamPolicy", "UpdateIamPolicy", "Grant", "Revoke", "Allow", "Deny"],
+        "manages_user_permissions": true
+      },
+      "rationale": "The ability to modify access controls is the master key to the entire system. An attacker who gains this permission can silently grant themselves or an accomplice any other permission.",
+      "remediation": "Restrict to a dedicated IAM-admin role with no other permissions; enforce MFA; require ticket-based approval; log every change with before/after diff.",
+      "compensating_controls": ["mfa_required", "dedicated_iam_role", "approval_workflow", "before_after_diff_logging"]
+    },
+    {
+      "rule_id": "CP-005",
+      "name": "Network / Connectivity Configuration",
+      "classification": "privileged_and_risky",
+      "severity": "HIGH",
+      "description": "Actions that modify network topology, firewall rules, routing tables, ingress controllers, VPN gateways, or DNS are control-plane actions that can expose resources to the internet or enable lateral movement.",
+      "triggers": {
+        "action_type_any": ["network"],
+        "action_keywords_any": ["CreateVpc", "ModifySecurityGroup", "PutFirewallRule", "UpdateFirewall", "CreateIngress", "SetDnsRecord", "UpdateRoute", "ModifyLoadBalancer", "PatchNetworkPolicy"],
+        "action_type_write": true
+      },
+      "rationale": "Network misconfigurations are the most common initial access vector. A single firewall rule change can expose an entire subnet to the internet.",
+      "remediation": "Treat network changes as code (GitOps); require peer review and CI pipeline validation before applying; alert on any public IP exposure.",
+      "compensating_controls": ["network_as_code", "peer_review", "public_exposure_alert", "audit_logging"]
+    },
+    {
+      "rule_id": "CP-006",
+      "name": "Encryption Key / Secret Management",
+      "classification": "privileged_and_risky",
+      "severity": "CRITICAL",
+      "description": "Actions that create, rotate, disable, or delete encryption keys, secrets, or certificates are control-plane actions with the highest potential for data exposure.",
+      "triggers": {
+        "action_keywords_any": ["CreateKey", "DeleteKey", "DisableKey", "RotateKey", "PutKeyPolicy", "ImportKey", "GenerateDataKey", "CreateSecret", "DeleteSecret", "UpdateSecret", "PutSecretValue", "ScheduleKeyDeletion"],
+        "scope_level_any": ["org", "account", "resource", "wildcard"]
+      },
+      "rationale": "Compromise of a key management action can decrypt all data protected by that key, or render it permanently unreadable (key deletion). Both are catastrophic.",
+      "remediation": "Require dual-control for key creation and deletion; enable automatic key rotation; restrict KMS permissions to a single dedicated service account with no other rights.",
+      "compensating_controls": ["dual_control", "automatic_rotation", "dedicated_kms_principal", "audit_logging"]
+    },
+    {
+      "rule_id": "DP-001",
+      "name": "Data-Plane Read (Standard)",
+      "classification": "compliant",
+      "severity": "LOW",
+      "description": "Actions that read, list, or download the content of a resource (not its configuration) are data-plane operations. These are not inherently Privileged but may become Risky at scale (bulk export).",
+      "triggers": {
+        "action_type_any": ["read"],
+        "action_keywords_any": ["GetObject", "ReadBlob", "SelectObjectContent", "GetItem", "Query", "Scan", "ListObjects", "HeadObject"],
+        "manages_user_permissions": false,
+        "action_type_manage_permissions": false
+      },
+      "rationale": "Data-plane reads operate within the established access boundary. Risk depends on data sensitivity, not the action itself.",
+      "remediation": "Ensure data classification tags are enforced; monitor for anomalous read volume (potential exfiltration).",
+      "compensating_controls": ["data_classification_tags", "anomaly_detection_on_read_volume"]
+    },
+    {
+      "rule_id": "DP-002",
+      "name": "Data-Plane Write (Standard)",
+      "classification": "risky",
+      "severity": "MEDIUM",
+      "description": "Actions that write, upload, or append content to a resource are data-plane operations. They are Risky (data integrity / injection risk) but not Privileged (they cannot modify the resource's access model).",
+      "triggers": {
+        "action_type_any": ["write", "data_plane"],
+        "action_keywords_any": ["PutObject", "WriteBlob", "UploadPart", "PutItem", "BatchWriteItem", "Publish", "SendMessage"],
+        "manages_user_permissions": false,
+        "action_type_manage_permissions": false
+      },
+      "rationale": "Data-plane writes can introduce malicious content, corrupt state, or overwrite legitimate data. They require integrity controls but do not grant privilege escalation paths.",
+      "remediation": "Enable object versioning; enforce content validation at ingest; monitor for unusual write patterns.",
+      "compensating_controls": ["versioning", "content_validation", "write_anomaly_detection"]
+    }
+  ]
+}

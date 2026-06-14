@@ -1,0 +1,361 @@
+{
+  "normalized_version": "1.0",
+  "source_file": "permission-collector/samples/gcp-iam-policy.json",
+  "source_type": "gcp_iam",
+  "collected_at": "2026-06-14T11:40:00Z",
+  "total_permissions": 11,
+  "risk_rating_by_vendor_summary": {
+    "CRITICAL": 6,
+    "HIGH": 0,
+    "MEDIUM": 1,
+    "LOW": 4,
+    "INFO": 0
+  },
+  "permissions": [
+    {
+      "id": "gcp-001",
+      "principal": "user:mike@example.com",
+      "principal_type": "user",
+      "resource": "*",
+      "effect": "allow",
+      "actions": ["roles/resourcemanager.organizationAdmin"],
+
+      "risk_rating_by_vendor": "CRITICAL",
+      "risk_factors": ["admin_privilege", "wildcard_resource", "org_level_admin", "manages_permissions"],
+
+      "action_type": {
+        "read": true,
+        "write": true,
+        "delete": true,
+        "admin": true,
+        "manage_permissions": true,
+        "cross_account": false,
+        "network": false,
+        "compute": false,
+        "storage": false,
+        "data_plane": false
+      },
+
+      "scope_level": "org",
+      "is_org_level": true,
+      "is_resource_level": false,
+      "manages_user_permissions": true,
+
+      "conditions": {}
+    },
+    {
+      "id": "gcp-002",
+      "principal": "group:admins@example.com",
+      "principal_type": "group",
+      "resource": "*",
+      "effect": "allow",
+      "actions": ["roles/resourcemanager.organizationAdmin"],
+
+      "risk_rating_by_vendor": "CRITICAL",
+      "risk_factors": ["admin_privilege", "wildcard_resource", "org_level_admin", "manages_permissions"],
+
+      "action_type": {
+        "read": true,
+        "write": true,
+        "delete": true,
+        "admin": true,
+        "manage_permissions": true,
+        "cross_account": false,
+        "network": false,
+        "compute": false,
+        "storage": false,
+        "data_plane": false
+      },
+
+      "scope_level": "org",
+      "is_org_level": true,
+      "is_resource_level": false,
+      "manages_user_permissions": true,
+
+      "conditions": {}
+    },
+    {
+      "id": "gcp-003",
+      "principal": "domain:google.com",
+      "principal_type": "group",
+      "resource": "*",
+      "effect": "allow",
+      "actions": ["roles/resourcemanager.organizationAdmin"],
+
+      "risk_rating_by_vendor": "CRITICAL",
+      "risk_factors": ["admin_privilege", "wildcard_resource", "org_level_admin", "manages_permissions"],
+
+      "action_type": {
+        "read": true,
+        "write": true,
+        "delete": true,
+        "admin": true,
+        "manage_permissions": true,
+        "cross_account": false,
+        "network": false,
+        "compute": false,
+        "storage": false,
+        "data_plane": false
+      },
+
+      "scope_level": "org",
+      "is_org_level": true,
+      "is_resource_level": false,
+      "manages_user_permissions": true,
+
+      "conditions": {}
+    },
+    {
+      "id": "gcp-004",
+      "principal": "serviceAccount:my-project-id@appspot.gserviceaccount.com",
+      "principal_type": "service_account",
+      "resource": "*",
+      "effect": "allow",
+      "actions": ["roles/resourcemanager.organizationAdmin"],
+
+      "risk_rating_by_vendor": "CRITICAL",
+      "risk_factors": ["admin_privilege", "wildcard_resource", "org_level_admin", "manages_permissions", "service_account_broad_scope"],
+
+      "action_type": {
+        "read": true,
+        "write": true,
+        "delete": true,
+        "admin": true,
+        "manage_permissions": true,
+        "cross_account": false,
+        "network": false,
+        "compute": false,
+        "storage": false,
+        "data_plane": false
+      },
+
+      "scope_level": "org",
+      "is_org_level": true,
+      "is_resource_level": false,
+      "manages_user_permissions": true,
+
+      "conditions": {}
+    },
+    {
+      "id": "gcp-005",
+      "principal": "user:eve@example.com",
+      "principal_type": "user",
+      "resource": "*",
+      "effect": "allow",
+      "actions": ["roles/resourcemanager.organizationViewer"],
+
+      "risk_rating_by_vendor": "LOW",
+      "risk_factors": ["time_bound_condition"],
+
+      "action_type": {
+        "read": true,
+        "write": false,
+        "delete": false,
+        "admin": false,
+        "manage_permissions": false,
+        "cross_account": false,
+        "network": false,
+        "compute": false,
+        "storage": false,
+        "data_plane": false
+      },
+
+      "scope_level": "org",
+      "is_org_level": true,
+      "is_resource_level": false,
+      "manages_user_permissions": false,
+
+      "conditions": {
+        "title": "expirable access",
+        "description": "Does not grant access after Sep 2020",
+        "expression": "request.time < timestamp('2020-10-01T00:00:00.000Z')"
+      }
+    },
+    {
+      "id": "gcp-006",
+      "principal": "user:alice@example.com",
+      "principal_type": "user",
+      "resource": "*",
+      "effect": "allow",
+      "actions": ["roles/storage.objectViewer"],
+
+      "risk_rating_by_vendor": "LOW",
+      "risk_factors": [],
+
+      "action_type": {
+        "read": true,
+        "write": false,
+        "delete": false,
+        "admin": false,
+        "manage_permissions": false,
+        "cross_account": false,
+        "network": false,
+        "compute": false,
+        "storage": true,
+        "data_plane": false
+      },
+
+      "scope_level": "wildcard",
+      "is_org_level": false,
+      "is_resource_level": false,
+      "manages_user_permissions": false,
+
+      "conditions": {}
+    },
+    {
+      "id": "gcp-007",
+      "principal": "serviceAccount:storage-reader@my-project-id.iam.gserviceaccount.com",
+      "principal_type": "service_account",
+      "resource": "*",
+      "effect": "allow",
+      "actions": ["roles/storage.objectViewer"],
+
+      "risk_rating_by_vendor": "LOW",
+      "risk_factors": [],
+
+      "action_type": {
+        "read": true,
+        "write": false,
+        "delete": false,
+        "admin": false,
+        "manage_permissions": false,
+        "cross_account": false,
+        "network": false,
+        "compute": false,
+        "storage": true,
+        "data_plane": false
+      },
+
+      "scope_level": "wildcard",
+      "is_org_level": false,
+      "is_resource_level": false,
+      "manages_user_permissions": false,
+
+      "conditions": {}
+    },
+    {
+      "id": "gcp-008",
+      "principal": "allAuthenticatedUsers",
+      "principal_type": "group",
+      "resource": "*",
+      "effect": "allow",
+      "actions": ["roles/storage.objectViewer"],
+
+      "risk_rating_by_vendor": "LOW",
+      "risk_factors": ["public_principal_all_authenticated_users"],
+
+      "action_type": {
+        "read": true,
+        "write": false,
+        "delete": false,
+        "admin": false,
+        "manage_permissions": false,
+        "cross_account": false,
+        "network": false,
+        "compute": false,
+        "storage": true,
+        "data_plane": false
+      },
+
+      "scope_level": "wildcard",
+      "is_org_level": false,
+      "is_resource_level": false,
+      "manages_user_permissions": false,
+
+      "conditions": {}
+    },
+    {
+      "id": "gcp-009",
+      "principal": "user:bob@example.com",
+      "principal_type": "user",
+      "resource": "*",
+      "effect": "allow",
+      "actions": ["roles/storage.objectAdmin"],
+
+      "risk_rating_by_vendor": "CRITICAL",
+      "risk_factors": ["admin_privilege", "wildcard_resource"],
+
+      "action_type": {
+        "read": true,
+        "write": true,
+        "delete": true,
+        "admin": true,
+        "manage_permissions": false,
+        "cross_account": false,
+        "network": false,
+        "compute": false,
+        "storage": true,
+        "data_plane": false
+      },
+
+      "scope_level": "wildcard",
+      "is_org_level": false,
+      "is_resource_level": false,
+      "manages_user_permissions": false,
+
+      "conditions": {}
+    },
+    {
+      "id": "gcp-010",
+      "principal": "group:storage-admins@example.com",
+      "principal_type": "group",
+      "resource": "*",
+      "effect": "allow",
+      "actions": ["roles/storage.objectAdmin"],
+
+      "risk_rating_by_vendor": "CRITICAL",
+      "risk_factors": ["admin_privilege", "wildcard_resource"],
+
+      "action_type": {
+        "read": true,
+        "write": true,
+        "delete": true,
+        "admin": true,
+        "manage_permissions": false,
+        "cross_account": false,
+        "network": false,
+        "compute": false,
+        "storage": true,
+        "data_plane": false
+      },
+
+      "scope_level": "wildcard",
+      "is_org_level": false,
+      "is_resource_level": false,
+      "manages_user_permissions": false,
+
+      "conditions": {}
+    },
+    {
+      "id": "gcp-011",
+      "principal": "user:security-reviewer@example.com",
+      "principal_type": "user",
+      "resource": "*",
+      "effect": "allow",
+      "actions": ["roles/iam.securityReviewer"],
+
+      "risk_rating_by_vendor": "MEDIUM",
+      "risk_factors": ["manages_permissions", "iam_read_access"],
+
+      "action_type": {
+        "read": true,
+        "write": false,
+        "delete": false,
+        "admin": false,
+        "manage_permissions": true,
+        "cross_account": false,
+        "network": false,
+        "compute": false,
+        "storage": false,
+        "data_plane": false
+      },
+
+      "scope_level": "wildcard",
+      "is_org_level": false,
+      "is_resource_level": false,
+      "manages_user_permissions": false,
+
+      "conditions": {}
+    }
+  ]
+}

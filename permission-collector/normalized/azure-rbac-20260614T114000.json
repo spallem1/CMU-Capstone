@@ -1,0 +1,239 @@
+{
+  "normalized_version": "1.0",
+  "source_file": "permission-collector/samples/azure-rbac.json",
+  "source_type": "azure_rbac",
+  "collected_at": "2026-06-14T11:40:00Z",
+  "total_permissions": 6,
+  "risk_rating_by_vendor_summary": {
+    "CRITICAL": 0,
+    "HIGH": 0,
+    "MEDIUM": 2,
+    "LOW": 3,
+    "INFO": 1
+  },
+  "permissions": [
+    {
+      "id": "azure-def-001",
+      "principal": "Virtual Machine Operator",
+      "principal_type": "role",
+      "resource": "/subscriptions/{subscriptionId1}|/subscriptions/{subscriptionId2}|/providers/Microsoft.Management/managementGroups/{groupId1}",
+      "effect": "allow",
+      "actions": [
+        "Microsoft.Storage/*/read",
+        "Microsoft.Network/*/read",
+        "Microsoft.Compute/*/read",
+        "Microsoft.Compute/virtualMachines/start/action",
+        "Microsoft.Compute/virtualMachines/restart/action",
+        "Microsoft.Authorization/*/read",
+        "Microsoft.ResourceHealth/availabilityStatuses/read",
+        "Microsoft.Resources/subscriptions/resourceGroups/read",
+        "Microsoft.Insights/alertRules/*",
+        "Microsoft.Insights/diagnosticSettings/*",
+        "Microsoft.Support/*"
+      ],
+
+      "risk_rating_by_vendor": "MEDIUM",
+      "risk_factors": ["write_actions", "manages_permissions_read", "management_group_scope"],
+
+      "action_type": {
+        "read": true,
+        "write": true,
+        "delete": false,
+        "admin": false,
+        "manage_permissions": true,
+        "cross_account": false,
+        "network": true,
+        "compute": true,
+        "storage": true,
+        "data_plane": false
+      },
+
+      "scope_level": "management_group",
+      "is_org_level": true,
+      "is_resource_level": false,
+      "manages_user_permissions": false,
+
+      "conditions": {}
+    },
+    {
+      "id": "azure-def-002",
+      "principal": "Storage Blob Data Reader (Custom)",
+      "principal_type": "role",
+      "resource": "/subscriptions/{subscriptionId1}",
+      "effect": "allow",
+      "actions": [
+        "Microsoft.Storage/storageAccounts/blobServices/containers/read",
+        "Microsoft.Storage/storageAccounts/blobServices/generateUserDelegationKey/action",
+        "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read"
+      ],
+
+      "risk_rating_by_vendor": "LOW",
+      "risk_factors": [],
+
+      "action_type": {
+        "read": true,
+        "write": false,
+        "delete": false,
+        "admin": false,
+        "manage_permissions": false,
+        "cross_account": false,
+        "network": false,
+        "compute": false,
+        "storage": true,
+        "data_plane": true
+      },
+
+      "scope_level": "account",
+      "is_org_level": false,
+      "is_resource_level": false,
+      "manages_user_permissions": false,
+
+      "conditions": {}
+    },
+    {
+      "id": "azure-def-003",
+      "principal": "Network Deny All",
+      "principal_type": "role",
+      "resource": "/subscriptions/{subscriptionId1}",
+      "effect": "allow",
+      "actions": ["Microsoft.Network/*/read"],
+
+      "risk_rating_by_vendor": "LOW",
+      "risk_factors": [],
+
+      "action_type": {
+        "read": true,
+        "write": false,
+        "delete": false,
+        "admin": false,
+        "manage_permissions": false,
+        "cross_account": false,
+        "network": true,
+        "compute": false,
+        "storage": false,
+        "data_plane": false
+      },
+
+      "scope_level": "account",
+      "is_org_level": false,
+      "is_resource_level": false,
+      "manages_user_permissions": false,
+
+      "conditions": {}
+    },
+    {
+      "id": "azure-def-003-notactions",
+      "principal": "Network Deny All",
+      "principal_type": "role",
+      "resource": "/subscriptions/{subscriptionId1}",
+      "effect": "deny",
+      "actions": [
+        "Microsoft.Network/virtualNetworks/write",
+        "Microsoft.Network/virtualNetworks/delete",
+        "Microsoft.Network/networkSecurityGroups/write",
+        "Microsoft.Network/networkSecurityGroups/delete"
+      ],
+
+      "risk_rating_by_vendor": "INFO",
+      "risk_factors": ["deny_effect"],
+
+      "action_type": {
+        "read": false,
+        "write": true,
+        "delete": true,
+        "admin": false,
+        "manage_permissions": false,
+        "cross_account": false,
+        "network": true,
+        "compute": false,
+        "storage": false,
+        "data_plane": false
+      },
+
+      "scope_level": "account",
+      "is_org_level": false,
+      "is_resource_level": false,
+      "manages_user_permissions": false,
+
+      "conditions": {}
+    },
+    {
+      "id": "azure-assign-001",
+      "principal": "bbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      "principal_type": "user",
+      "resource": "/subscriptions/{subscriptionId1}",
+      "effect": "allow",
+      "actions": [
+        "Microsoft.Storage/*/read",
+        "Microsoft.Network/*/read",
+        "Microsoft.Compute/*/read",
+        "Microsoft.Compute/virtualMachines/start/action",
+        "Microsoft.Compute/virtualMachines/restart/action",
+        "Microsoft.Authorization/*/read",
+        "Microsoft.ResourceHealth/availabilityStatuses/read",
+        "Microsoft.Resources/subscriptions/resourceGroups/read",
+        "Microsoft.Insights/alertRules/*",
+        "Microsoft.Insights/diagnosticSettings/*",
+        "Microsoft.Support/*"
+      ],
+
+      "risk_rating_by_vendor": "MEDIUM",
+      "risk_factors": ["write_actions", "manages_permissions_read"],
+
+      "action_type": {
+        "read": true,
+        "write": true,
+        "delete": false,
+        "admin": false,
+        "manage_permissions": true,
+        "cross_account": false,
+        "network": true,
+        "compute": true,
+        "storage": true,
+        "data_plane": false
+      },
+
+      "scope_level": "account",
+      "is_org_level": false,
+      "is_resource_level": false,
+      "manages_user_permissions": false,
+
+      "conditions": {}
+    },
+    {
+      "id": "azure-assign-002",
+      "principal": "dddddd-dddd-dddd-dddd-dddddddddddd",
+      "principal_type": "service_account",
+      "resource": "/subscriptions/{subscriptionId1}/resourceGroups/my-rg",
+      "effect": "allow",
+      "actions": [
+        "Microsoft.Storage/storageAccounts/blobServices/containers/read",
+        "Microsoft.Storage/storageAccounts/blobServices/generateUserDelegationKey/action",
+        "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read"
+      ],
+
+      "risk_rating_by_vendor": "LOW",
+      "risk_factors": [],
+
+      "action_type": {
+        "read": true,
+        "write": false,
+        "delete": false,
+        "admin": false,
+        "manage_permissions": false,
+        "cross_account": false,
+        "network": false,
+        "compute": false,
+        "storage": true,
+        "data_plane": true
+      },
+
+      "scope_level": "resource",
+      "is_org_level": false,
+      "is_resource_level": true,
+      "manages_user_permissions": false,
+
+      "conditions": {}
+    }
+  ]
+}

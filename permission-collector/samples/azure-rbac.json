@@ -1,0 +1,96 @@
+{
+  "_comment": "Azure RBAC file with two role definitions: a custom 'Virtual Machine Operator' role and a custom 'Storage Reader' role, plus a role assignment. Source: https://learn.microsoft.com/en-us/azure/role-based-access-control/custom-roles",
+
+  "roleDefinitions": [
+    {
+      "Name": "Virtual Machine Operator",
+      "Id": "88888888-8888-8888-8888-888888888888",
+      "IsCustom": true,
+      "Description": "Can monitor and restart virtual machines.",
+      "Actions": [
+        "Microsoft.Storage/*/read",
+        "Microsoft.Network/*/read",
+        "Microsoft.Compute/*/read",
+        "Microsoft.Compute/virtualMachines/start/action",
+        "Microsoft.Compute/virtualMachines/restart/action",
+        "Microsoft.Authorization/*/read",
+        "Microsoft.ResourceHealth/availabilityStatuses/read",
+        "Microsoft.Resources/subscriptions/resourceGroups/read",
+        "Microsoft.Insights/alertRules/*",
+        "Microsoft.Insights/diagnosticSettings/*",
+        "Microsoft.Support/*"
+      ],
+      "NotActions": [],
+      "DataActions": [],
+      "NotDataActions": [],
+      "AssignableScopes": [
+        "/subscriptions/{subscriptionId1}",
+        "/subscriptions/{subscriptionId2}",
+        "/providers/Microsoft.Management/managementGroups/{groupId1}"
+      ]
+    },
+    {
+      "Name": "Storage Blob Data Reader (Custom)",
+      "Id": "99999999-9999-9999-9999-999999999999",
+      "IsCustom": true,
+      "Description": "Allows read access to Azure Blob Storage data.",
+      "Actions": [
+        "Microsoft.Storage/storageAccounts/blobServices/containers/read",
+        "Microsoft.Storage/storageAccounts/blobServices/generateUserDelegationKey/action"
+      ],
+      "NotActions": [],
+      "DataActions": [
+        "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read"
+      ],
+      "NotDataActions": [],
+      "AssignableScopes": [
+        "/subscriptions/{subscriptionId1}"
+      ]
+    },
+    {
+      "Name": "Network Deny All",
+      "Id": "77777777-7777-7777-7777-777777777777",
+      "IsCustom": true,
+      "Description": "Denies all network modifications; read-only on network resources.",
+      "Actions": [
+        "Microsoft.Network/*/read"
+      ],
+      "NotActions": [
+        "Microsoft.Network/virtualNetworks/write",
+        "Microsoft.Network/virtualNetworks/delete",
+        "Microsoft.Network/networkSecurityGroups/write",
+        "Microsoft.Network/networkSecurityGroups/delete"
+      ],
+      "DataActions": [],
+      "NotDataActions": [],
+      "AssignableScopes": [
+        "/subscriptions/{subscriptionId1}"
+      ]
+    }
+  ],
+
+  "roleAssignments": [
+    {
+      "id": "/subscriptions/{subscriptionId1}/providers/Microsoft.Authorization/roleAssignments/aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "name": "aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "properties": {
+        "roleDefinitionId": "/subscriptions/{subscriptionId1}/providers/Microsoft.Authorization/roleDefinitions/88888888-8888-8888-8888-888888888888",
+        "principalId": "bbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        "principalType": "User",
+        "scope": "/subscriptions/{subscriptionId1}"
+      }
+    },
+    {
+      "id": "/subscriptions/{subscriptionId1}/resourceGroups/my-rg/providers/Microsoft.Authorization/roleAssignments/cccccc-cccc-cccc-cccc-cccccccccccc",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "name": "cccccc-cccc-cccc-cccc-cccccccccccc",
+      "properties": {
+        "roleDefinitionId": "/subscriptions/{subscriptionId1}/providers/Microsoft.Authorization/roleDefinitions/99999999-9999-9999-9999-999999999999",
+        "principalId": "dddddd-dddd-dddd-dddd-dddddddddddd",
+        "principalType": "ServicePrincipal",
+        "scope": "/subscriptions/{subscriptionId1}/resourceGroups/my-rg"
+      }
+    }
+  ]
+}

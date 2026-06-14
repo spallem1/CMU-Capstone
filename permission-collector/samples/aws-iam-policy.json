@@ -1,0 +1,62 @@
+{
+  "_comment": "AWS IAM policy file built from 5 randomly selected S3 API operations sourced from https://docs.aws.amazon.com/AmazonS3/latest/API/API_Operations_Amazon_Simple_Storage_Service.html. Selected: PutBucketAcl, GetObject, DeleteObjects, ListBuckets, PutBucketPolicy.",
+
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowPutBucketAcl",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::123456789012:role/BucketAdminRole"
+      },
+      "Action": "s3:PutBucketAcl",
+      "Resource": "arn:aws:s3:::my-app-bucket",
+      "_api_ref": "https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketAcl.html",
+      "_description": "Grants permission to set the access control list (ACL) permissions for a new or existing bucket."
+    },
+    {
+      "Sid": "AllowGetObject",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::123456789012:user/app-service-user"
+      },
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::my-app-bucket/*",
+      "_api_ref": "https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html",
+      "_description": "Retrieves objects from Amazon S3."
+    },
+    {
+      "Sid": "AllowDeleteObjects",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::123456789012:role/CleanupLambdaRole"
+      },
+      "Action": "s3:DeleteObject",
+      "Resource": "arn:aws:s3:::my-app-bucket/*",
+      "_api_ref": "https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjects.html",
+      "_description": "Removes one or more objects from a bucket. Can delete up to 1000 objects in a single request."
+    },
+    {
+      "Sid": "AllowListBuckets",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::123456789012:role/AuditRole"
+      },
+      "Action": "s3:ListAllMyBuckets",
+      "Resource": "*",
+      "_api_ref": "https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListBuckets.html",
+      "_description": "Returns a list of all buckets owned by the authenticated sender of the request."
+    },
+    {
+      "Sid": "AllowPutBucketPolicy",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::123456789012:role/SecurityAdminRole"
+      },
+      "Action": "s3:PutBucketPolicy",
+      "Resource": "arn:aws:s3:::my-app-bucket",
+      "_api_ref": "https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketPolicy.html",
+      "_description": "Applies an Amazon S3 bucket policy to an Amazon S3 bucket."
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "_comment": "GCP IAM Policy example with multiple role bindings including a conditional binding. Source: https://docs.cloud.google.com/iam/docs/reference/rest/v1/Policy",
+  "bindings": [
+    {
+      "role": "roles/resourcemanager.organizationAdmin",
+      "members": [
+        "user:mike@example.com",
+        "group:admins@example.com",
+        "domain:google.com",
+        "serviceAccount:my-project-id@appspot.gserviceaccount.com"
+      ]
+    },
+    {
+      "role": "roles/resourcemanager.organizationViewer",
+      "members": [
+        "user:eve@example.com"
+      ],
+      "condition": {
+        "title": "expirable access",
+        "description": "Does not grant access after Sep 2020",
+        "expression": "request.time < timestamp('2020-10-01T00:00:00.000Z')"
+      }
+    },
+    {
+      "role": "roles/storage.objectViewer",
+      "members": [
+        "user:alice@example.com",
+        "serviceAccount:storage-reader@my-project-id.iam.gserviceaccount.com",
+        "allAuthenticatedUsers"
+      ]
+    },
+    {
+      "role": "roles/storage.objectAdmin",
+      "members": [
+        "user:bob@example.com",
+        "group:storage-admins@example.com"
+      ]
+    },
+    {
+      "role": "roles/iam.securityReviewer",
+      "members": [
+        "user:security-reviewer@example.com"
+      ]
+    }
+  ],
+  "etag": "BwWWja0YfJA=",
+  "version": 3
+}

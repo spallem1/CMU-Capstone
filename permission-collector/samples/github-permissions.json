@@ -1,0 +1,127 @@
+{
+  "_comment": "GitHub repository collaborators and permissions structure. Collaborator response format sourced from official GitHub REST API documentation: https://docs.github.com/en/enterprise-server@3.15/rest/collaborators/collaborators. The 'List repository collaborators' endpoint (GET /repos/{owner}/{repo}/collaborators) returns this structure.",
+
+  "repository": {
+    "owner": "octocat",
+    "name": "Hello-World",
+    "full_name": "octocat/Hello-World",
+    "private": false,
+    "visibility": "public",
+    "default_branch": "main"
+  },
+
+  "collaborators": [
+    {
+      "login": "octocat",
+      "id": 1,
+      "node_id": "MDQ6VXNlcjE=",
+      "avatar_url": "https://github.com/images/error/octocat_happy.gif",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/octocat",
+      "html_url": "https://github.com/octocat",
+      "followers_url": "https://api.github.com/users/octocat/followers",
+      "following_url": "https://api.github.com/users/octocat/following{/other_user}",
+      "gists_url": "https://api.github.com/users/octocat/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/octocat/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/octocat/subscriptions",
+      "organizations_url": "https://api.github.com/users/octocat/orgs",
+      "repos_url": "https://api.github.com/users/octocat/repos",
+      "events_url": "https://api.github.com/users/octocat/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/octocat/received_events",
+      "type": "User",
+      "site_admin": false,
+      "permissions": {
+        "pull": true,
+        "triage": true,
+        "push": true,
+        "maintain": true,
+        "admin": true
+      },
+      "role_name": "admin"
+    },
+    {
+      "login": "monalisa",
+      "id": 2,
+      "node_id": "MDQ6VXNlcjI=",
+      "avatar_url": "https://github.com/images/error/monalisa_happy.gif",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/monalisa",
+      "html_url": "https://github.com/monalisa",
+      "followers_url": "https://api.github.com/users/monalisa/followers",
+      "following_url": "https://api.github.com/users/monalisa/following{/other_user}",
+      "gists_url": "https://api.github.com/users/monalisa/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/monalisa/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/monalisa/subscriptions",
+      "organizations_url": "https://api.github.com/users/monalisa/orgs",
+      "repos_url": "https://api.github.com/users/monalisa/repos",
+      "events_url": "https://api.github.com/users/monalisa/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/monalisa/received_events",
+      "type": "User",
+      "site_admin": false,
+      "permissions": {
+        "pull": true,
+        "triage": true,
+        "push": true,
+        "maintain": false,
+        "admin": false
+      },
+      "role_name": "write"
+    },
+    {
+      "login": "hubot",
+      "id": 3,
+      "node_id": "MDQ6VXNlcjM=",
+      "avatar_url": "https://github.com/images/error/hubot_happy.gif",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/hubot",
+      "html_url": "https://github.com/hubot",
+      "followers_url": "https://api.github.com/users/hubot/followers",
+      "following_url": "https://api.github.com/users/hubot/following{/other_user}",
+      "gists_url": "https://api.github.com/users/hubot/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/hubot/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/hubot/subscriptions",
+      "organizations_url": "https://api.github.com/users/hubot/orgs",
+      "repos_url": "https://api.github.com/users/hubot/repos",
+      "events_url": "https://api.github.com/users/hubot/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/hubot/received_events",
+      "type": "User",
+      "site_admin": false,
+      "permissions": {
+        "pull": true,
+        "triage": true,
+        "push": false,
+        "maintain": false,
+        "admin": false
+      },
+      "role_name": "triage"
+    },
+    {
+      "login": "dependabot[bot]",
+      "id": 27856297,
+      "node_id": "MDM6Qm90Mjc4NTYyOTc=",
+      "avatar_url": "https://github.com/images/error/dependabot_happy.gif",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/dependabot%5Bbot%5D",
+      "html_url": "https://github.com/apps/dependabot",
+      "followers_url": "https://api.github.com/users/dependabot%5Bbot%5D/followers",
+      "following_url": "https://api.github.com/users/dependabot%5Bbot%5D/following{/other_user}",
+      "gists_url": "https://api.github.com/users/dependabot%5Bbot%5D/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/dependabot%5Bbot%5D/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/dependabot%5Bbot%5D/subscriptions",
+      "organizations_url": "https://api.github.com/users/dependabot%5Bbot%5D/orgs",
+      "repos_url": "https://api.github.com/users/dependabot%5Bbot%5D/repos",
+      "events_url": "https://api.github.com/users/dependabot%5Bbot%5D/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/dependabot%5Bbot%5D/received_events",
+      "type": "Bot",
+      "site_admin": false,
+      "permissions": {
+        "pull": true,
+        "triage": false,
+        "push": true,
+        "maintain": false,
+        "admin": false
+      },
+      "role_name": "write"
+    }
+  ]
+}

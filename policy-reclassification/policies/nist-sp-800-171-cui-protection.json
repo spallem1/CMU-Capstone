@@ -1,0 +1,121 @@
+{
+  "policy_id": "NIST-800-171-CUI",
+  "policy_name": "NIST SP 800-171 Rev 2 - Protecting Controlled Unclassified Information",
+  "version": "1.0",
+  "effective_date": "2026-06-14",
+  "standard": "NIST SP 800-171 Rev 2",
+  "standard_url": "https://csrc.nist.gov/publications/detail/sp/800-171/rev-2/final",
+  "purpose": "Apply NIST SP 800-171 Rev 2 requirements to classify permissions that interact with Controlled Unclassified Information (CUI) or CUI-adjacent resources. Focuses on the Access Control (3.1.x) and System and Communications Protection (3.13.x) requirement families. Resources tagged with CUI, PII, PHI, or SENSITIVE are subject to heightened classification.",
+  "cui_indicators": ["CUI", "PII", "PHI", "SENSITIVE", "CONFIDENTIAL", "PROTECTED", "RESTRICTED", "HIPAA", "PCI", "EXPORT_CONTROLLED"],
+  "classification_model": {
+    "privileged": "Any permission that grants create, modify, delete, or access-control management over a CUI-tagged resource is Privileged under 3.1.1 and 3.1.2.",
+    "risky": "Any permission that allows bulk read, export, or copy of CUI-tagged resources, or any permission lacking encryption-in-transit requirements, is Risky under 3.13.8."
+  },
+  "rules": [
+    {
+      "rule_id": "CUI-3.1.1-001",
+      "control_ref": "3.1.1: Limit system access to authorised users, processes acting on behalf of authorised users, and devices",
+      "name": "CUI Resource Access by Unauthorised Principal Type",
+      "classification": "privileged_and_risky",
+      "severity": "CRITICAL",
+      "description": "3.1.1 requires that access to CUI resources be limited to explicitly authorised users. A wildcard principal ('*', 'allUsers', 'allAuthenticatedUsers') granted access to any resource tagged as CUI directly violates this requirement.",
+      "triggers": {
+        "resource_tags_any": ["CUI", "PII", "PHI", "SENSITIVE", "CONFIDENTIAL"],
+        "principal_pattern_any": ["*", "allUsers", "allAuthenticatedUsers", "domain:*"],
+        "effect": "allow"
+      },
+      "nist_requirement": "3.1.1",
+      "rationale": "A wildcard principal grants access to any identity that presents valid credentials, including external parties and unauthenticated users. CUI must only be accessible to named, authorised principals.",
+      "remediation": "Remove wildcard principals from all policies governing CUI-tagged resources. Replace with explicit named principals or groups with documented authorisation.",
+      "compensating_controls": ["named_principal_only", "resource_tag_enforcement", "access_certification"]
+    },
+    {
+      "rule_id": "CUI-3.1.2-001",
+      "control_ref": "3.1.2: Limit system access to types of transactions and functions authorised users are permitted to execute",
+      "name": "CUI Resource with Write or Delete Access",
+      "classification": "privileged_and_risky",
+      "severity": "HIGH",
+      "description": "3.1.2 requires that authorised users are limited to transaction types appropriate to their role. Write and delete access to CUI-tagged resources must be restricted to principals with a documented need to modify CUI — read-only access is the default authorisation for most principals.",
+      "triggers": {
+        "resource_tags_any": ["CUI", "PII", "PHI", "SENSITIVE"],
+        "action_type_any": ["write", "delete"],
+        "effect": "allow"
+      },
+      "nist_requirement": "3.1.2",
+      "rationale": "Write access to CUI-tagged resources can result in data corruption, injection of false records, or cover-up of unauthorised access via overwrites.",
+      "remediation": "Decompose CUI access into read-only and write-capable roles. Assign write/delete roles only to principals with a documented need and management approval.",
+      "compensating_controls": ["read_write_role_separation", "management_approval", "write_audit_logging"]
+    },
+    {
+      "rule_id": "CUI-3.1.3-001",
+      "control_ref": "3.1.3: Control the flow of CUI in accordance with approved authorisations",
+      "name": "CUI Data Exfiltration Risk - Bulk Read or Export",
+      "classification": "risky",
+      "severity": "HIGH",
+      "description": "3.1.3 requires that CUI flow be controlled. Permissions that allow bulk read (List + GetObject on '*', Scan on a database, SelectObjectContent) on CUI-tagged resources create an exfiltration risk — a single permission can expose the entire CUI dataset.",
+      "triggers": {
+        "resource_tags_any": ["CUI", "PII", "PHI", "SENSITIVE", "CONFIDENTIAL"],
+        "action_type_any": ["read", "data_plane"],
+        "action_keywords_any": ["ListObjects", "ListObjectsV2", "Scan", "SelectObjectContent", "ExportTableToPointInTime", "ListBuckets", "GetObject"],
+        "resource_pattern": "*",
+        "effect": "allow"
+      },
+      "nist_requirement": "3.1.3",
+      "rationale": "Bulk read on CUI resources enables the extraction of an entire CUI dataset in a single API call. Even legitimate principals with bulk-read rights pose an exfiltration risk if their credentials are compromised.",
+      "remediation": "Restrict bulk-read actions to named prefixes or specific object keys. Enable VPC endpoint policies to prevent exfiltration to non-authorised destinations. Monitor for anomalous read volume.",
+      "compensating_controls": ["vpc_endpoint_policy", "resource_prefix_scope", "dlp_monitoring", "read_volume_anomaly_alert"]
+    },
+    {
+      "rule_id": "CUI-3.1.5-001",
+      "control_ref": "3.1.5: Employ the principle of least privilege, including for specific security functions and privileged accounts",
+      "name": "Privileged Access to CUI Resource Without Explicit Authorisation",
+      "classification": "privileged_and_risky",
+      "severity": "CRITICAL",
+      "description": "3.1.5 requires least privilege to be applied specifically to security functions and privileged accounts. Any admin, manage-permissions, or delete action on a CUI-tagged resource is a privileged access event and must be explicitly authorised.",
+      "triggers": {
+        "resource_tags_any": ["CUI", "PII", "PHI", "SENSITIVE"],
+        "action_type_any": ["admin", "manage_permissions", "delete"],
+        "effect": "allow"
+      },
+      "nist_requirement": "3.1.5",
+      "rationale": "Privileged access to CUI resources requires explicit authorisation beyond normal access controls. The combination of privileged action + CUI data is the highest-risk classification.",
+      "remediation": "Require management approval, MFA, and session recording for all privileged access to CUI resources. Log every action with the approver's identity.",
+      "compensating_controls": ["management_approval", "mfa_required", "session_recording", "approver_identity_logging"]
+    },
+    {
+      "rule_id": "CUI-3.13.8-001",
+      "control_ref": "3.13.8: Implement cryptographic mechanisms to prevent unauthorised disclosure of CUI during transmission",
+      "name": "CUI Resource Accessible Over Unencrypted Transport",
+      "classification": "risky",
+      "severity": "HIGH",
+      "description": "3.13.8 requires cryptographic protection of CUI in transit. A permission that grants access to a CUI resource without requiring encrypted transport (TLS/HTTPS) in the policy condition allows the data to be accessed over unencrypted channels.",
+      "triggers": {
+        "resource_tags_any": ["CUI", "PII", "PHI", "SENSITIVE"],
+        "conditions_absent": ["aws:SecureTransport", "ssl_required", "tls_required"],
+        "effect": "allow"
+      },
+      "nist_requirement": "3.13.8",
+      "rationale": "Unencrypted access to CUI in transit enables passive interception (man-in-the-middle). Even internal network traffic must be encrypted for CUI under 800-171.",
+      "remediation": "Add a Deny policy statement with Condition: {Bool: {aws:SecureTransport: false}} on all CUI-tagged S3 buckets and endpoints. Enforce TLS 1.2 minimum.",
+      "compensating_controls": ["secure_transport_enforced", "tls_1_2_minimum", "deny_http_policy"]
+    },
+    {
+      "rule_id": "CUI-3.13.16-001",
+      "control_ref": "3.13.16: Protect the confidentiality of CUI at rest",
+      "name": "CUI Resource Without Encryption-at-Rest Condition",
+      "classification": "risky",
+      "severity": "MEDIUM",
+      "description": "3.13.16 requires protection of CUI at rest. A write permission to a CUI-tagged resource without requiring server-side encryption (SSE) headers allows unencrypted data to be stored.",
+      "triggers": {
+        "resource_tags_any": ["CUI", "PII", "PHI", "SENSITIVE"],
+        "action_type_any": ["write"],
+        "conditions_absent": ["s3:x-amz-server-side-encryption", "encryption_required", "cmk_required"],
+        "effect": "allow"
+      },
+      "nist_requirement": "3.13.16",
+      "rationale": "Without a Deny condition on unencrypted puts, callers can write plaintext objects to CUI-tagged buckets. Physical or logical storage access then exposes the data.",
+      "remediation": "Add a Deny statement: {Effect: Deny, Action: s3:PutObject, Condition: {Null: {s3:x-amz-server-side-encryption: true}}} on all CUI buckets. Enforce SSE-KMS with a customer-managed key.",
+      "compensating_controls": ["sse_kms_enforced", "deny_unencrypted_put", "cmk_key_policy_review"]
+    }
+  ]
+}

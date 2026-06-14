@@ -1,0 +1,120 @@
+{
+  "policy_id": "CSA-CCM-V4-DSP",
+  "policy_name": "CSA Cloud Controls Matrix v4 - Data Security & Privacy Lifecycle Management",
+  "version": "1.0",
+  "effective_date": "2026-06-14",
+  "standard": "CSA Cloud Controls Matrix v4.0",
+  "standard_url": "https://cloudsecurityalliance.org/research/cloud-controls-matrix/",
+  "purpose": "Apply CSA CCM v4.0 Data Security and Privacy Lifecycle Management (DSP) domain controls to classify permissions that affect data confidentiality, integrity, and availability. Covers DSP-01 through DSP-10 with a focus on identifying permissions that are Privileged or Risky from a data governance perspective.",
+  "classification_model": {
+    "privileged": "A permission is Privileged under the DSP domain when it grants control over data classification, encryption keys, backup policies, or data retention — actions that define the security posture of the data rather than operating on the data itself.",
+    "risky": "A permission is Risky under DSP when it allows bulk access, transfer, or deletion of data without audit controls, or when it can bypass data classification and encryption requirements."
+  },
+  "rules": [
+    {
+      "rule_id": "DSP-01-001",
+      "control_ref": "DSP-01: Security and Privacy Roles and Responsibilities",
+      "name": "Data Access Without Resource Classification Tag",
+      "classification": "risky",
+      "severity": "LOW",
+      "description": "DSP-01 requires clearly defined roles for data security and privacy. At the permission level, access to untagged (unclassified) resources is Risky because the data sensitivity is unknown. Unclassified resources may contain sensitive data that was never tagged.",
+      "triggers": {
+        "resource_tags_absent": ["classification", "data_class", "sensitivity", "CUI", "PII", "public"],
+        "action_type_any": ["read", "write", "delete"],
+        "effect": "allow"
+      },
+      "csa_control": "DSP-01",
+      "rationale": "An untagged resource is an unknown resource from a data governance perspective. Permissions granted to unclassified resources cannot be evaluated for appropriateness.",
+      "remediation": "Enforce resource tagging at creation via Tag Policies (AWS), Organisation Policy (GCP), or Azure Policy. Block access to untagged resources until classification is applied.",
+      "compensating_controls": ["tag_policy_enforcement", "automated_classification_scan", "block_untagged_resource_access"]
+    },
+    {
+      "rule_id": "DSP-03-001",
+      "control_ref": "DSP-03: Data Classification",
+      "name": "Permission to Modify Data Classification Tags",
+      "classification": "privileged_and_risky",
+      "severity": "HIGH",
+      "description": "DSP-03 requires that data be classified according to type, sensitivity, and criticality. A permission that allows modification of classification tags on a resource is Privileged and Risky because it allows an actor to downgrade a resource's classification, potentially bypassing security controls applied to higher-sensitivity classes.",
+      "triggers": {
+        "action_keywords_any": ["TagResource", "SetResourceTags", "PutBucketTagging", "SetLabels", "AddTags", "UpdateTags", "DeleteTags", "RemoveTags"],
+        "action_type_any": ["write"],
+        "effect": "allow"
+      },
+      "csa_control": "DSP-03",
+      "rationale": "If a principal can remove a 'PII' or 'CUI' tag from a resource, all policy rules conditioned on that tag are immediately bypassed. Tag modification is therefore a privilege-escalation vector.",
+      "remediation": "Restrict tag modification to a dedicated data-governance role. Use tag policies to prevent removal of specific classification tags. Apply SCPs that deny tag deletion for security tags.",
+      "compensating_controls": ["tag_immutability_policy", "dedicated_governance_role", "tag_change_alert"]
+    },
+    {
+      "rule_id": "DSP-05-001",
+      "control_ref": "DSP-05: Data Flow Documentation",
+      "name": "Permission Enabling Cross-Boundary Data Transfer",
+      "classification": "risky",
+      "severity": "HIGH",
+      "description": "DSP-05 requires documentation of data flows across trust boundaries. A permission that allows copying, replicating, or transferring data to a different account, region, or external service creates a cross-boundary data flow. Without documented authorisation, this is Risky.",
+      "triggers": {
+        "action_keywords_any": ["CopyObject", "ReplicateObject", "CrossRegionReplication", "PutBucketReplication", "CreateSnapshot", "CopySnapshot", "ExportTableToPointInTime", "Transfer", "Sync", "Replicate"],
+        "action_type_any": ["write"],
+        "effect": "allow"
+      },
+      "csa_control": "DSP-05",
+      "rationale": "Cross-boundary data transfers can move sensitive data outside of the security controls of the source environment. Replication rules, in particular, can silently copy entire datasets to an attacker-controlled bucket.",
+      "remediation": "Restrict replication/copy actions to approved destination accounts and regions via conditions. Document all cross-boundary data flows. Alert on any new replication rule creation.",
+      "compensating_controls": ["destination_account_condition", "destination_region_condition", "replication_rule_alert", "data_flow_documentation"]
+    },
+    {
+      "rule_id": "DSP-06-001",
+      "control_ref": "DSP-06: Data Ownership and Stewardship",
+      "name": "Permission to Delete Data Retention Policies or Lifecycle Rules",
+      "classification": "privileged_and_risky",
+      "severity": "HIGH",
+      "description": "DSP-06 requires that data ownership and stewardship be defined and enforced, including retention requirements. A permission that allows deletion or modification of data lifecycle / retention rules is Privileged because it can override mandatory retention periods, violating legal and regulatory obligations.",
+      "triggers": {
+        "action_keywords_any": ["DeleteBucketLifecycle", "PutBucketLifecycle", "DeleteTableRetention", "ModifyRetentionPolicy", "DeleteRetentionPolicy", "SetRetention", "RemoveLifecyclePolicy"],
+        "action_type_any": ["delete", "write"],
+        "effect": "allow"
+      },
+      "csa_control": "DSP-06",
+      "rationale": "Removing or shortening retention policies can result in premature deletion of data that must be retained for compliance (GDPR, HIPAA, SOX). This is both a compliance violation and a potential evidence-destruction vector.",
+      "remediation": "Lock lifecycle policies using object lock / retention lock configurations. Require legal-hold approval before modifying retention settings. Separate the delete-lifecycle permission from operational roles.",
+      "compensating_controls": ["retention_lock", "legal_hold", "lifecycle_change_approval", "compliance_review"]
+    },
+    {
+      "rule_id": "DSP-07-001",
+      "control_ref": "DSP-07: Data Inventory and Data Flow",
+      "name": "Permission to Access All Resources Without Inventory Scope",
+      "classification": "risky",
+      "severity": "MEDIUM",
+      "description": "DSP-07 requires a maintained data inventory. A permission scoped to all resources ('*') makes it impossible to associate access events with specific data assets in the inventory. Account-wide or wildcard-scoped read access is Risky because it defeats data asset tracking.",
+      "triggers": {
+        "scope_level_any": ["account", "org", "wildcard"],
+        "action_type_any": ["read"],
+        "resource_pattern": "*",
+        "effect": "allow"
+      },
+      "csa_control": "DSP-07",
+      "rationale": "Wildcard-scoped reads produce access logs that reference '*' rather than a specific resource, making it impossible to map the access to a specific asset in the data inventory.",
+      "remediation": "Scope read permissions to specific named resources or resource prefixes. Use resource-based policies in addition to identity-based policies for critical data assets.",
+      "compensating_controls": ["named_resource_scope", "resource_based_policy", "data_inventory_tagging"]
+    },
+    {
+      "rule_id": "DSP-10-001",
+      "control_ref": "DSP-10: Non-Production Data",
+      "name": "Production Data Accessible in Non-Production Environment",
+      "classification": "risky",
+      "severity": "HIGH",
+      "description": "DSP-10 requires that real production data not be used in non-production environments without explicit sanitisation. A permission that allows a principal tagged as a non-production workload to access a production-tagged resource is Risky.",
+      "triggers": {
+        "principal_environment_tag": "non-production",
+        "resource_environment_tag": "production",
+        "resource_tags_any": ["production", "prod", "live"],
+        "principal_tags_any": ["dev", "test", "staging", "non-production", "sandbox"],
+        "effect": "allow"
+      },
+      "csa_control": "DSP-10",
+      "rationale": "Non-production environments typically have weaker security controls, broader access, and less rigorous monitoring. Granting them access to production data expands the attack surface unnecessarily.",
+      "remediation": "Use environment isolation (separate accounts/projects/namespaces for prod vs non-prod). Use data masking/anonymisation to provide non-production teams with representative data.",
+      "compensating_controls": ["environment_account_isolation", "data_masking", "prod_access_alert_on_dev_principal"]
+    }
+  ]
+}

@@ -1,0 +1,125 @@
+{
+  "policy_id": "NIST-800-207-ZTA",
+  "policy_name": "NIST SP 800-207 - Zero Trust Architecture Permission Policy",
+  "version": "1.0",
+  "effective_date": "2026-06-14",
+  "standard": "NIST SP 800-207",
+  "standard_url": "https://csrc.nist.gov/publications/detail/sp/800-207/final",
+  "purpose": "Apply Zero Trust Architecture (ZTA) principles from NIST SP 800-207 to classify permissions. ZTA assumes no implicit trust: every permission must be minimally scoped, time-bound where possible, continuously verified, and carry compensating controls. Permissions that violate these principles are classified as Privileged or Risky.",
+  "zero_trust_tenets": [
+    "All data sources and computing services are considered resources (Section 3.1)",
+    "All communication is secured regardless of network location (Section 3.2)",
+    "Access to individual enterprise resources is granted on a per-session basis (Section 3.3)",
+    "Access to resources is determined by dynamic policy (Section 3.4)",
+    "The enterprise monitors and measures the integrity and security posture of all owned and associated assets (Section 3.5)",
+    "All resource authentication and authorisation are dynamic and strictly enforced before access is allowed (Section 3.6)",
+    "The enterprise collects as much information as possible about the current state of assets, network infrastructure and communications (Section 3.7)"
+  ],
+  "classification_model": {
+    "privileged": "Any permission that operates outside a per-session, per-resource grant — i.e., persistent standing access to control-plane operations — violates ZTA tenet 3.3 and is Privileged.",
+    "risky": "Any permission that lacks dynamic policy enforcement (no conditions, no time bounds, no context verification) violates ZTA tenet 3.4 and is Risky."
+  },
+  "rules": [
+    {
+      "rule_id": "ZTA-001",
+      "name": "Standing Persistent Privileged Access (No Time Bound)",
+      "classification": "privileged_and_risky",
+      "severity": "HIGH",
+      "description": "ZTA Section 3.3 requires that access be granted per-session and revoked when the session ends. A permission with no time-bound condition represents standing persistent access — the antithesis of Zero Trust. Any control-plane action without a time condition is classified as Privileged and Risky.",
+      "triggers": {
+        "action_type_any": ["admin", "manage_permissions", "delete"],
+        "conditions_absent": ["aws:CurrentTime", "request.time", "NotBefore", "NotAfter", "expirable_access"],
+        "effect": "allow"
+      },
+      "nist_reference": "NIST SP 800-207 Section 3.3, 4.1",
+      "rationale": "Standing access means a principal retains elevated rights indefinitely. In ZTA, every access decision must be re-evaluated. Standing admin access is the most exploited pattern in cloud breaches.",
+      "remediation": "Implement Just-In-Time (JIT) access with time-bound conditions. Use AWS IAM Roles Anywhere, GCP Workload Identity, or Azure PIM to issue temporary credentials per session.",
+      "compensating_controls": ["jit_access", "time_bound_condition", "session_recording", "automatic_expiry"]
+    },
+    {
+      "rule_id": "ZTA-002",
+      "name": "Implicit Network-Location Trust (No IP / VPN Condition)",
+      "classification": "risky",
+      "severity": "MEDIUM",
+      "description": "ZTA Section 3.2 states that all communication is secured regardless of network location — meaning network location must not be used as the sole trust signal. However, a permission with no IP or network condition at all provides less context for the policy engine, which is Risky for sensitive actions.",
+      "triggers": {
+        "action_type_any": ["admin", "manage_permissions"],
+        "conditions_absent": ["aws:SourceIp", "aws:VpcSourceIp", "aws:SourceVpc", "request.ip", "callerIp"],
+        "scope_level_any": ["org", "account", "wildcard"],
+        "effect": "allow"
+      },
+      "nist_reference": "NIST SP 800-207 Section 3.2, 3.4",
+      "rationale": "While ZTA does not rely solely on network location, the complete absence of network context for privileged actions means the policy engine has fewer signals to make a dynamic trust decision.",
+      "remediation": "Add source VPC or IP range conditions to privileged actions. Combine with MFA and device compliance conditions for a multi-signal trust evaluation.",
+      "compensating_controls": ["vpc_source_condition", "mfa_condition", "device_compliance_condition"]
+    },
+    {
+      "rule_id": "ZTA-003",
+      "name": "Broad Scope Violating Micro-Segmentation",
+      "classification": "privileged_and_risky",
+      "severity": "HIGH",
+      "description": "ZTA Section 4.2 describes micro-segmentation as a deployment model where resources are protected individually. A permission scoped to all resources ('*') or an entire account violates micro-segmentation by removing resource-level boundaries.",
+      "triggers": {
+        "scope_level_any": ["org", "account", "wildcard"],
+        "action_type_any": ["write", "delete", "admin", "manage_permissions"],
+        "effect": "allow"
+      },
+      "nist_reference": "NIST SP 800-207 Section 4.2 - Micro-Segmentation",
+      "rationale": "Broad resource scope means that a compromised principal can reach all resources in the scope. Micro-segmentation limits the blast radius of a breach to a single resource or segment.",
+      "remediation": "Scope every permission to a specific named resource. Use resource tags, path prefixes, or resource groups as the boundary instead of account-level wildcards.",
+      "compensating_controls": ["resource_level_scoping", "tag_based_conditions", "network_segmentation"]
+    },
+    {
+      "rule_id": "ZTA-004",
+      "name": "No MFA Condition on Privileged Action",
+      "classification": "risky",
+      "severity": "HIGH",
+      "description": "ZTA requires continuous verification (Section 3.6). For human principals performing privileged actions, MFA is the minimum additional verification signal. A privileged permission without an MFA condition relies solely on static credential verification.",
+      "triggers": {
+        "action_type_any": ["admin", "manage_permissions", "delete"],
+        "principal_type_any": ["user"],
+        "conditions_absent": ["aws:MultiFactorAuthPresent", "MFAPresent", "mfa_verified"],
+        "effect": "allow"
+      },
+      "nist_reference": "NIST SP 800-207 Section 3.6 - All resource authentication and authorisation are dynamic",
+      "rationale": "Credentials (passwords, API keys) can be stolen passively. MFA ensures a second, harder-to-steal factor is verified at the time of the privileged action.",
+      "remediation": "Add a Condition block requiring aws:MultiFactorAuthPresent = true for all admin and IAM-management actions. Deny these actions when MFA is not present.",
+      "compensating_controls": ["mfa_condition_required", "phishing_resistant_mfa", "hardware_security_key"]
+    },
+    {
+      "rule_id": "ZTA-005",
+      "name": "Control-Plane Action by Non-Monitored Principal",
+      "classification": "privileged",
+      "severity": "MEDIUM",
+      "description": "ZTA Section 3.5 requires that all assets be monitored continuously. A principal performing control-plane actions (create, modify, delete, manage permissions) must have all actions logged to a tamper-evident audit trail. The absence of enforced audit logging on a privileged principal is itself a Privileged classification trigger.",
+      "triggers": {
+        "action_type_any": ["admin", "manage_permissions", "delete", "write"],
+        "scope_level_any": ["org", "account", "cluster"],
+        "audit_logging_condition_absent": true,
+        "effect": "allow"
+      },
+      "nist_reference": "NIST SP 800-207 Section 3.5 - Monitor and measure integrity of all assets",
+      "rationale": "Without enforced audit logging, privileged actions cannot be reconstructed for incident response. ZTA requires observable behaviour from every principal in every session.",
+      "remediation": "Enable CloudTrail / Cloud Audit Logs / K8s audit logs for all control-plane actions. Use SCP/Organisation Policy to deny disabling of audit logging. Integrate with a SIEM.",
+      "compensating_controls": ["cloudtrail_enforced", "organisation_policy_audit", "siem_integration", "log_tampering_alert"]
+    },
+    {
+      "rule_id": "ZTA-006",
+      "name": "Implicit Trust for Internal Service-to-Service Calls",
+      "classification": "risky",
+      "severity": "MEDIUM",
+      "description": "ZTA explicitly rejects the concept of a trusted internal network. A service account granted broad permissions justified solely by being 'internal' (same VPC, same account, same cluster namespace) violates the ZTA principle that network location confers no trust.",
+      "triggers": {
+        "principal_type_any": ["service_account", "system"],
+        "scope_level_any": ["account", "namespace"],
+        "action_type_any": ["admin", "manage_permissions", "write", "delete"],
+        "conditions_absent": ["workload_identity", "oidc_token", "pod_service_account_annotation"],
+        "effect": "allow"
+      },
+      "nist_reference": "NIST SP 800-207 Section 2.1 - ZTA rejects implicit trust for internal traffic",
+      "rationale": "East-west (service-to-service) traffic is the primary vector for lateral movement after initial compromise. Each service must authenticate individually regardless of colocation.",
+      "remediation": "Replace long-lived service account keys with Workload Identity Federation (GCP), IAM Roles for Service Accounts (AWS), or Pod Identity (Azure/K8s). Bind identity to the specific workload, not the hosting infrastructure.",
+      "compensating_controls": ["workload_identity_federation", "oidc_token_binding", "mutual_tls", "network_policy_enforcement"]
+    }
+  ]
+}

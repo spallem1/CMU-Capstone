@@ -1,0 +1,139 @@
+{
+  "policy_id": "CSA-CCM-V4-IAM",
+  "policy_name": "CSA Cloud Controls Matrix v4 - Identity & Access Management Domain",
+  "version": "1.0",
+  "effective_date": "2026-06-14",
+  "standard": "CSA Cloud Controls Matrix v4.0",
+  "standard_url": "https://cloudsecurityalliance.org/research/cloud-controls-matrix/",
+  "purpose": "Apply CSA CCM v4.0 Identity and Access Management (IAM) domain controls to classify permissions as Privileged or Risky. The IAM domain contains 14 controls (IAM-01 through IAM-14) covering policy, credential lifecycle, privileged access management, and federation.",
+  "classification_model": {
+    "privileged": "Under CSA CCM IAM-03 and IAM-14, a permission is Privileged when it is assigned to a privileged role or when it enables actions that should require PAM tooling, approval workflow, or elevated assurance.",
+    "risky": "A permission is Risky under CSA CCM when it violates least-privilege (IAM-05), lacks periodic review (IAM-07), or enables credential or access sprawl that could lead to unauthorised access."
+  },
+  "rules": [
+    {
+      "rule_id": "IAM-01-001",
+      "control_ref": "IAM-01: Identity and Access Management Policy and Procedures",
+      "name": "Permission Without Policy Justification Field",
+      "classification": "risky",
+      "severity": "LOW",
+      "description": "IAM-01 requires that an IAM policy and procedures document be established and maintained. At the permission level, this means each permission entry should be traceable to a documented business justification. Permissions with no source metadata (no Sid, no description, no ticket reference) are flagged as Risky because they cannot be reviewed against policy.",
+      "triggers": {
+        "metadata_absent": ["Sid", "description", "business_justification", "ticket_ref"],
+        "effect": "allow"
+      },
+      "csa_control": "IAM-01",
+      "rationale": "Undocumented permissions cannot be reviewed during access certification. They accumulate as 'orphan' grants that persist beyond their intended lifetime.",
+      "remediation": "Add a Sid or tag to every policy statement with the ticket reference, owner, and review date. Enforce this via a policy linter in your CI/CD pipeline.",
+      "compensating_controls": ["policy_linter", "access_certification", "iac_policy_template"]
+    },
+    {
+      "rule_id": "IAM-03-001",
+      "control_ref": "IAM-03: Privileged Access Management",
+      "name": "Admin or Root Privilege Without PAM Controls",
+      "classification": "privileged_and_risky",
+      "severity": "CRITICAL",
+      "description": "IAM-03 requires that privileged user accounts be managed through a Privileged Access Management (PAM) process including session recording, time-limited access, and approval workflow. Any permission granting admin or root-equivalent access without compensating PAM controls is Privileged and Risky.",
+      "triggers": {
+        "action_type_any": ["admin"],
+        "action_keywords_any": ["AdministratorAccess", "FullAccess", "Owner", "Root", "*"],
+        "compensating_controls_absent": ["jit_access", "session_recording", "approval_workflow"],
+        "effect": "allow"
+      },
+      "csa_control": "IAM-03",
+      "rationale": "Unmanaged privileged access is the leading cause of cloud breaches. PAM tooling ensures that admin rights are never persistently held by a human principal.",
+      "remediation": "Route all privileged access through a PAM solution (CyberArk, HashiCorp Vault, AWS SSO with approval). Replace permanent admin roles with time-bound JIT elevation.",
+      "compensating_controls": ["pam_tooling", "jit_elevation", "session_recording", "approval_workflow", "mfa_required"]
+    },
+    {
+      "rule_id": "IAM-04-001",
+      "control_ref": "IAM-04: Separation of Duties",
+      "name": "Permission Enables Self-Service Privilege Escalation",
+      "classification": "privileged_and_risky",
+      "severity": "CRITICAL",
+      "description": "IAM-04 requires separation of duties to reduce the risk of fraud or error. A principal who holds both the ability to create/modify IAM roles AND the ability to assume those roles can silently escalate their own privileges — a critical separation of duties violation.",
+      "triggers": {
+        "combined_permissions_on_same_principal": ["iam:CreateRole", "iam:AttachRolePolicy", "iam:PassRole", "sts:AssumeRole"],
+        "action_type_any": ["manage_permissions"],
+        "manages_user_permissions": true,
+        "effect": "allow"
+      },
+      "csa_control": "IAM-04",
+      "rationale": "Self-service privilege escalation is the most critical separation-of-duties failure in cloud IAM. It allows a compromised non-admin account to silently become an admin.",
+      "remediation": "Separate the IAM-admin role (creates/modifies roles) from the workload role (assumes roles). Use IAM Permission Boundaries to prevent roles from granting more than the boundary allows.",
+      "compensating_controls": ["permission_boundaries", "iam_role_separation", "scp_deny_self_escalation"]
+    },
+    {
+      "rule_id": "IAM-05-001",
+      "control_ref": "IAM-05: Least Privilege",
+      "name": "Permission Broader Than Documented Business Need",
+      "classification": "risky",
+      "severity": "MEDIUM",
+      "description": "IAM-05 requires that users, groups, and roles are assigned only the permissions required for their documented function. Any permission set that includes write or delete actions alongside read actions where only read was documented is over-provisioned under IAM-05.",
+      "triggers": {
+        "action_type_any": ["write", "delete"],
+        "action_type_read": true,
+        "scope_level_any": ["account", "org", "wildcard"],
+        "effect": "allow"
+      },
+      "csa_control": "IAM-05",
+      "rationale": "Combined read+write+delete access is rarely required for a single workload function. Granting all three allows data exfiltration followed by deletion to cover tracks.",
+      "remediation": "Decompose read, write, and delete into separate roles. Apply the role most appropriate to each workload's documented function.",
+      "compensating_controls": ["role_decomposition", "access_advisor_rightsizing", "periodic_access_review"]
+    },
+    {
+      "rule_id": "IAM-07-001",
+      "control_ref": "IAM-07: User Access Reviews",
+      "name": "No Review Date or Expiry Condition",
+      "classification": "risky",
+      "severity": "MEDIUM",
+      "description": "IAM-07 requires that user access rights be reviewed at defined intervals. A permission with no expiry condition and no review date metadata has an unbounded lifetime, making it impossible to enforce periodic review.",
+      "triggers": {
+        "action_type_any": ["admin", "manage_permissions", "write", "delete"],
+        "conditions_absent": ["aws:CurrentTime", "request.time", "NotAfter", "expiry_date", "review_date"],
+        "metadata_absent": ["review_date", "valid_until", "next_review"],
+        "effect": "allow"
+      },
+      "csa_control": "IAM-07",
+      "rationale": "Permissions without an expiry accumulate over time. Role creep — the accumulation of permissions that were once valid but are no longer needed — is one of the most common audit findings.",
+      "remediation": "Tag all IAM grants with a 'valid-until' date and 'next-review' date. Use automated tooling to flag and disable grants past their review date.",
+      "compensating_controls": ["access_expiry_tag", "automated_access_review", "access_certification_tool"]
+    },
+    {
+      "rule_id": "IAM-09-001",
+      "control_ref": "IAM-09: Identity Federation and SSO",
+      "name": "Long-Lived Static Credentials (Non-Federated Identity)",
+      "classification": "privileged_and_risky",
+      "severity": "HIGH",
+      "description": "IAM-09 requires the use of federated identity and SSO where possible. Long-lived API keys, service account JSON keys, or static passwords for privileged principals violate this control. Federated, short-lived tokens are the required pattern.",
+      "triggers": {
+        "credential_type_any": ["static_api_key", "service_account_json_key", "iam_access_key", "bearer_token_no_expiry"],
+        "action_type_any": ["admin", "manage_permissions"],
+        "principal_type_any": ["user", "service_account"],
+        "effect": "allow"
+      },
+      "csa_control": "IAM-09",
+      "rationale": "Static credentials do not expire and are easily leaked via code repositories, logs, or memory dumps. Federated short-lived tokens limit the window of exploitation after a credential leak.",
+      "remediation": "Replace static IAM access keys with federated identities (OIDC, SAML 2.0). For service accounts, use Workload Identity Federation. Set a maximum session duration and enforce rotation.",
+      "compensating_controls": ["oidc_federation", "saml_sso", "workload_identity", "key_rotation_enforcement"]
+    },
+    {
+      "rule_id": "IAM-14-001",
+      "control_ref": "IAM-14: Privileged Access Roles",
+      "name": "Privileged Role Assigned to Overly Broad Principal Set",
+      "classification": "privileged_and_risky",
+      "severity": "HIGH",
+      "description": "IAM-14 requires that privileged access roles are tightly controlled and assigned only to specifically authorised individuals. A privileged permission (admin, manage-permissions) granted to a group, domain, or wildcard principal violates this control by making the privileged role available to an unbounded set of identities.",
+      "triggers": {
+        "principal_type_any": ["group", "system"],
+        "principal_pattern_any": ["allUsers", "allAuthenticatedUsers", "domain:*", "*"],
+        "action_type_any": ["admin", "manage_permissions"],
+        "effect": "allow"
+      },
+      "csa_control": "IAM-14",
+      "rationale": "Assigning a privileged role to a group or domain means the role is accessible to any current or future member of that group or domain. Privileged roles must be assigned to named individuals with documented justification.",
+      "remediation": "Replace group or domain principal assignments for privileged roles with named individual principals. Use JIT tooling to add/remove individuals on a per-session basis.",
+      "compensating_controls": ["named_principal_assignment", "group_member_review", "jit_privileged_access"]
+    }
+  ]
+}

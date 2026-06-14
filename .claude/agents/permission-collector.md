@@ -37,7 +37,10 @@ You are the Permission Collector Agent. Your sole job is to enumerate permission
 
 ## Output format
 
-Return **only** the following JSON (no prose before or after):
+Produce two outputs for every run:
+
+### 1. Raw snapshot
+Write to `permission-collector/snapshots/<scope-slug>-<timestamp>.json`:
 
 ```json
 {
@@ -63,10 +66,105 @@ Return **only** the following JSON (no prose before or after):
 }
 ```
 
-Write the output to `permission-collector/snapshots/<scope-slug>-<timestamp>.json` and also return it inline so the orchestrator can consume it without reading a file.
+### 2. Normalized file (one per source file processed)
+Write to `permission-collector/normalized/<source-slug>-<timestamp>.json`:
+
+```json
+{
+  "normalized_version": "1.0",
+  "source_file": "<original file path>",
+  "source_type": "<aws_iam | gcp_iam | azure_rbac | kubernetes_rbac | github | generic>",
+  "collected_at": "<ISO 8601 timestamp>",
+  "total_permissions": 0,
+  "risk_rating_by_vendor_summary": {
+    "CRITICAL": 0,
+    "HIGH": 0,
+    "MEDIUM": 0,
+    "LOW": 0,
+    "INFO": 0
+  },
+  "permissions": [
+    {
+      "id": "<matches raw snapshot id>",
+      "principal": "<principal>",
+      "principal_type": "<user | role | group | service_account | system>",
+      "resource": "<resource>",
+      "effect": "<allow | deny>",
+      "actions": ["<action>"],
+
+      "risk_rating_by_vendor": "<CRITICAL | HIGH | MEDIUM | LOW | INFO>",
+      "risk_factors": ["<e.g. wildcard_action, wildcard_resource, admin_privilege, manages_permissions, cross_account>"],
+
+      "action_type": {
+        "read": "<true | false>",
+        "write": "<true | false>",
+        "delete": "<true | false>",
+        "admin": "<true | false>",
+        "manage_permissions": "<true | false>",
+        "cross_account": "<true | false>",
+        "network": "<true | false>",
+        "compute": "<true | false>",
+        "storage": "<true | false>",
+        "data_plane": "<true | false>"
+      },
+
+      "scope_level": "<org | account | management_group | cluster | namespace | resource | wildcard>",
+      "is_org_level": "<true | false>",
+      "is_resource_level": "<true | false>",
+      "manages_user_permissions": "<true | false>",
+
+      "conditions": {}
+    }
+  ]
+}
+```
+
+## Normalization rules
+
+### Risk classification
+Apply the highest matching tier:
+
+| Risk | Condition |
+|------|-----------|
+| CRITICAL | Action is `*` AND resource is `*`; OR action contains `admin`/`FullAccess`/`root`/`superuser` |
+| HIGH | Action is `*` (any resource); OR resource is `*` with a write/delete action; OR manages IAM/RBAC with wildcard |
+| MEDIUM | Write or delete action on a named resource; cross-account/cross-org trust; service account with broad access; manages permissions on a scoped resource |
+| LOW | Read-only (`get`, `list`, `watch`, `describe`, `view`) on a named resource |
+| INFO | Any `deny` effect entry |
+
+### action_type classification (set to true if any action matches)
+
+| Field | Matching patterns |
+|-------|-------------------|
+| `read` | get, list, watch, describe, view, read, show, head, select |
+| `write` | put, create, update, write, push, set, patch, apply, upload, modify |
+| `delete` | delete, remove, drop, destroy, terminate, deregister, revoke |
+| `admin` | admin, root, FullAccess, `*`, superuser, owner |
+| `manage_permissions` | iam:, roles/iam., Microsoft.Authorization/, rolebinding, clusterrolebinding, grant, acl, permission |
+| `cross_account` | sts:AssumeRole with a principal from a different account; cross-org conditions |
+| `network` | network, vpc, subnet, firewall, loadbalancer, dns, route, ingress |
+| `compute` | compute, virtualMachines, ec2, gce, container, pod, node, function, lambda |
+| `storage` | storage, s3, gcs, blob, bucket, disk, volume, filesystem |
+| `data_plane` | DataActions (Azure), data., blobs, objects, rows, tables, streams |
+
+### scope_level classification
+
+| Value | When to apply |
+|-------|---------------|
+| `org` | Resource is an organization root, management group, or account root (`*` principal org) |
+| `account` | Resource covers an entire AWS account / GCP project / Azure subscription |
+| `management_group` | Azure management group scope |
+| `cluster` | Kubernetes ClusterRole/ClusterRoleBinding (cluster-wide) |
+| `namespace` | Kubernetes Role/RoleBinding within a namespace |
+| `resource` | Specific named resource (ARN, path, bucket name, repo name) |
+| `wildcard` | Resource is `*` with no scoping condition |
+
+### manages_user_permissions
+Set `true` when any action grants the ability to create, modify, or delete other users' access rights (IAM, RBAC, role assignments, collaborator grants).
 
 ## Rules
 - Never infer or hallucinate permissions not found in source material.
 - If a source is inaccessible, record it in `collection_errors` and continue.
 - Deduplicate exact matches; keep distinct entries for the same principal with different resources or actions.
 - Flatten inherited roles only when `depth` is `deep`.
+- Every permission entry in the normalized output must have all fields populated — use `false` / `"resource"` / `"LOW"` as defaults when a field cannot be determined, and note it in the entry's `risk_factors` as `"undetermined"`.

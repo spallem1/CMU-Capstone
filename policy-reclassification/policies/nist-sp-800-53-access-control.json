@@ -1,0 +1,134 @@
+{
+  "policy_id": "NIST-800-53-AC",
+  "policy_name": "NIST SP 800-53 Rev 5 - Access Control (AC) Family",
+  "version": "1.0",
+  "effective_date": "2026-06-14",
+  "standard": "NIST SP 800-53 Rev 5",
+  "standard_url": "https://csrc.nist.gov/publications/detail/sp/800-53/rev-5/final",
+  "purpose": "Apply NIST SP 800-53 Rev 5 Access Control family controls to classify permissions as Privileged or Risky. Focuses on AC-2 (Account Management), AC-3 (Access Enforcement), AC-5 (Separation of Duties), AC-6 (Least Privilege), and AC-17 (Remote Access).",
+  "classification_model": {
+    "privileged": "Under AC-6, a permission is Privileged when it exceeds the minimum access required for a principal's role. Privileged access must be explicitly authorized, logged, and reviewed periodically.",
+    "risky": "A permission is Risky when it violates AC-3 (access enforcement) by granting access beyond what the security policy allows, or when it creates conditions for AC-5 (separation of duties) violations."
+  },
+  "rules": [
+    {
+      "rule_id": "AC-2-001",
+      "control_ref": "AC-2: Account Management",
+      "name": "Service Account with Interactive / User-Level Permissions",
+      "classification": "privileged_and_risky",
+      "severity": "HIGH",
+      "description": "NIST AC-2 requires organisations to identify and manage accounts by type (individual, shared, group, system, service). Service accounts (non-human) should never hold interactive or user-level permissions. A service account granted admin, delete, or policy-management actions violates account type boundaries.",
+      "triggers": {
+        "principal_type_any": ["service_account", "system"],
+        "action_type_any": ["admin", "manage_permissions", "delete"],
+        "effect": "allow"
+      },
+      "nist_control": "AC-2(1) - Automated System Account Management; AC-2(6) - Dynamic Privilege Management",
+      "rationale": "Service accounts are often shared and lack MFA. Granting them elevated permissions creates a privileged pathway that bypasses user-level controls.",
+      "remediation": "Scope service account permissions to the minimum data-plane actions required. Use workload identity federation instead of long-lived credentials.",
+      "compensating_controls": ["workload_identity_federation", "mfa_on_service_account_key_creation", "periodic_access_review"]
+    },
+    {
+      "rule_id": "AC-3-001",
+      "control_ref": "AC-3: Access Enforcement",
+      "name": "Wildcard Resource with Allow Effect",
+      "classification": "privileged_and_risky",
+      "severity": "CRITICAL",
+      "description": "AC-3 requires that access to resources be enforced in accordance with the approved authorisations. A wildcard resource ('*') bypasses resource-level enforcement entirely, granting access to all current and future resources of a type.",
+      "triggers": {
+        "resource_pattern": "*",
+        "effect": "allow",
+        "action_type_any": ["write", "delete", "admin", "manage_permissions"]
+      },
+      "nist_control": "AC-3 - Access Enforcement; AC-3(7) - Role-Based Access Control",
+      "rationale": "Wildcard resources violate the principle of explicit authorisation. Resources added after the policy is written are automatically in scope, which can never be explicitly authorised.",
+      "remediation": "Replace '*' with a specific resource ARN, path, or name. Use resource tags or conditions to scope access where exact names are dynamic.",
+      "compensating_controls": ["resource_tag_conditions", "scp_guardrails", "config_rule_no_wildcard_policies"]
+    },
+    {
+      "rule_id": "AC-5-001",
+      "control_ref": "AC-5: Separation of Duties",
+      "name": "Combined Read-Policy and Write-Policy on Same Principal",
+      "classification": "risky",
+      "severity": "HIGH",
+      "description": "AC-5 requires that duties and areas of responsibility be separated to reduce the risk of malevolent activity. A principal who can both read the current policy AND write/replace it can silently modify their own permissions — a classic separation-of-duties violation.",
+      "triggers": {
+        "combined_actions": ["GetBucketPolicy", "PutBucketPolicy"],
+        "combined_actions_description": "Same principal holds both read-policy and write-policy actions",
+        "action_type_manage_permissions": true,
+        "action_type_read": true
+      },
+      "nist_control": "AC-5(a) - Separation of Duties; AC-5(b) - Document Separation of Duties",
+      "rationale": "A principal who can read and write their own policy can grant themselves any additional permission without oversight — a privilege escalation path.",
+      "remediation": "Split policy-read (for audit) and policy-write (for change management) into separate roles assigned to separate principals or teams.",
+      "compensating_controls": ["separate_audit_role", "separate_iam_admin_role", "change_approval_workflow"]
+    },
+    {
+      "rule_id": "AC-6-001",
+      "control_ref": "AC-6: Least Privilege",
+      "name": "Wildcard Action (Any Action)",
+      "classification": "privileged_and_risky",
+      "severity": "CRITICAL",
+      "description": "AC-6 mandates that principals are granted only the authorisations needed to accomplish required tasks. A wildcard action ('*' or ':*') grants all current and future actions, which can never satisfy least privilege.",
+      "triggers": {
+        "action_pattern_any": ["*", ":*", "/*", ".*"],
+        "effect": "allow"
+      },
+      "nist_control": "AC-6 - Least Privilege; AC-6(1) - Authorise Access to Security Functions; AC-6(5) - Privileged Accounts",
+      "rationale": "Wildcard actions guarantee over-provisioning. They grant every new API action automatically, meaning the effective permissions grow over time without any authorisation event.",
+      "remediation": "Enumerate the exact actions required by the workload. Use AWS Access Advisor, GCP Policy Insights, or Azure Access Review to identify which actions are actually used.",
+      "compensating_controls": ["access_advisor_review", "permission_boundary", "scp_action_deny_list"]
+    },
+    {
+      "rule_id": "AC-6-002",
+      "control_ref": "AC-6(5): Least Privilege - Privileged Accounts",
+      "name": "Administrative or Owner-Level Permission",
+      "classification": "privileged_and_risky",
+      "severity": "CRITICAL",
+      "description": "AC-6(5) requires that organisations restrict privileged accounts (those with administrator, superuser, or owner access) to a minimum and subject them to heightened controls. Any permission containing admin, owner, FullAccess, root, or superuser keywords is classified as Privileged.",
+      "triggers": {
+        "action_keywords_any": ["Admin", "Administrator", "FullAccess", "Owner", "Root", "Superuser", "PowerUser"],
+        "action_type_any": ["admin"],
+        "effect": "allow"
+      },
+      "nist_control": "AC-6(5) - Privileged Accounts; AC-6(9) - Log Use of Privileged Functions",
+      "rationale": "Administrative accounts represent the highest-risk access class. Compromise of a single admin account can result in total resource takeover.",
+      "remediation": "Replace managed admin policies with custom policies granting only the specific actions needed. Use AWS Permission Boundaries or Azure PIM to time-bound privileged access.",
+      "compensating_controls": ["permission_boundaries", "pim_jit_access", "privileged_session_recording", "mfa_required"]
+    },
+    {
+      "rule_id": "AC-6-003",
+      "control_ref": "AC-6: Least Privilege",
+      "name": "Org-Level or Account-Wide Scope",
+      "classification": "privileged",
+      "severity": "HIGH",
+      "description": "A permission scoped to the entire organisation, account, or management group grants access to all resources within that scope — present and future. Even read-only access at this level is Privileged because it exposes the full inventory of resources.",
+      "triggers": {
+        "scope_level_any": ["org", "account", "management_group"],
+        "effect": "allow"
+      },
+      "nist_control": "AC-6 - Least Privilege; AC-6(3) - Network Access to Privileged Commands",
+      "rationale": "Account-wide scope means the permission applies to resources the granting administrator may not be aware of yet. Every new resource is automatically in scope.",
+      "remediation": "Scope permissions to specific resource groups, projects, or named resources. Use SCPs/Organisation Policies to enforce resource-level scoping.",
+      "compensating_controls": ["resource_group_scoping", "organisation_policy_guardrails", "periodic_scope_review"]
+    },
+    {
+      "rule_id": "AC-17-001",
+      "control_ref": "AC-17: Remote Access",
+      "name": "Cross-Account or Cross-Organisation Trust without Condition",
+      "classification": "privileged_and_risky",
+      "severity": "HIGH",
+      "description": "AC-17 requires that organisations authorise, monitor, and control all remote access to the system. A trust relationship that allows a principal from an external account or organisation to assume a role without an ExternalId, MFA, or Org condition is an uncontrolled remote access path.",
+      "triggers": {
+        "action_type_any": ["cross_account"],
+        "action_keywords_any": ["AssumeRole", "sts:AssumeRole", "AssumeRoleWithWebIdentity"],
+        "conditions_absent": ["sts:ExternalId", "aws:PrincipalOrgID", "MFAPresent"],
+        "effect": "allow"
+      },
+      "nist_control": "AC-17(1) - Automated Monitoring and Control; AC-17(2) - Protection of Confidentiality and Integrity Using Encryption",
+      "rationale": "Cross-account access without a verifiable condition (ExternalId, Org, MFA) is exploitable via confused-deputy attacks. Any account that knows the role ARN can assume it.",
+      "remediation": "Add aws:PrincipalOrgID to limit assumption to principals within your organisation. Add sts:ExternalId for third-party integrations. Enforce MFA with condition key aws:MultiFactorAuthPresent.",
+      "compensating_controls": ["principal_org_id_condition", "external_id_condition", "mfa_condition"]
+    }
+  ]
+}

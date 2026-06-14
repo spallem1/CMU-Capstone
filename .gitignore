@@ -4,6 +4,16 @@ permission-collector/snapshots/
 policy-reclassification/findings/
 historical-context-analyst/analysis/
 
+# RAG vector store (rebuilt by indexer.py)
+policy-reclassification/vector_store/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
 # Secrets / credentials
 *.env
 .env*
