@@ -1,0 +1,16 @@
+# Agent output directories (generated at runtime)
+paa-orchestrator/reports/
+permission-collector/snapshots/
+policy-reclassification/findings/
+historical-context-analyst/analysis/
+
+# Secrets / credentials
+*.env
+.env*
+credentials.json
+*.key
+*.pem
+
+# OS
+.DS_Store
+Thumbs.db
