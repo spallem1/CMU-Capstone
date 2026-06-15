@@ -44,3 +44,29 @@ Scope slug: lowercase, replace `:` `/` spaces with `-`.
 | `/paa-index-policies` | Before first run — build the Policy Reclassification vector store |
 | `/paa-index-decisions` | Before first run — build the Historical Context Analyst vector store |
 | `/paa-record-decision` | After reviewing the report — record analyst decisions for future precedents |
+
+## MCP server (team distribution)
+
+`mcp-server/server.py` exposes the PAA RAG pipelines as MCP tools so any Claude Code
+session can query the stores without running the full agent pipeline.
+
+**Registration (once per analyst machine):**
+```
+claude mcp add paa python /absolute/path/to/PAA-Claude-MultiAgent/mcp-server/server.py
+```
+
+**Tools exposed:**
+
+| Tool | Purpose |
+|------|---------|
+| `paa_store_status` | Health check — confirm stores are indexed before analysis |
+| `paa_retrieve_policy_rules` | Retrieve NIST/CSA rules for a normalized permission entry |
+| `paa_retrieve_decisions` | Retrieve past analyst decisions for a normalized permission entry |
+| `paa_record_decision` | Record a new analyst decision and re-index the decision store |
+
+**Prerequisites (install once):**
+```
+pip install -r mcp-server/requirements.txt
+```
+
+Then run `/paa-index-policies` and `/paa-index-decisions` to build the vector stores.
