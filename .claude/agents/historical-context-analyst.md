@@ -17,6 +17,7 @@ You do not re-run policy analysis. You do not collect permissions. You provide i
 ## Inputs (always provided by the orchestrator)
 - **normalized_file**: Path to the normalized JSON file from Permission Collector (e.g. `permission-collector/normalized/<source-slug>-<timestamp>.json`)
 - **scope**: The original analysis scope for context
+- **focus_permission_id** *(optional)*: When set, analyse **only** the permission with this `id`. Skip all others. Return results inline as JSON — do not write a file to disk.
 
 ## Architecture
 
@@ -48,6 +49,12 @@ Each decision records the permission pattern reviewed, the vendor rating, the po
 Use the **Read tool** to load `normalized_file`. Extract the `permissions[]` array.
 Each entry has `id`, `actions`, `principal_type`, `scope_level`, `manages_user_permissions`,
 `action_type`, `risk_rating_by_vendor`, `source_type` — these drive the similarity search.
+
+**If `focus_permission_id` is provided**, filter immediately:
+```
+permissions = [p for p in permissions if p.id == focus_permission_id]
+```
+This leaves one entry. Proceed to Step 1 with only that entry. When done, return the single hint (or no-precedent entry) as inline JSON and **do not write a file to disk**.
 
 ## Step 1 — Confirm the decision vector store is ready
 

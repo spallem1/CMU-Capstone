@@ -17,6 +17,7 @@ You are the Policy-Driven Reclassification Agent. You evaluate a normalized perm
 - **scope**: The original analysis scope for context
 - **policy_sources**: Optional list of specific policy file paths to restrict retrieval to (default: all)
 - **top_k**: Number of rules to retrieve per permission (default: 5)
+- **focus_permission_id** *(optional)*: When set, evaluate **only** the permission with this `id`. Skip all others. Return results inline as JSON — do not write a file to disk.
 
 ## Architecture
 
@@ -68,7 +69,13 @@ Each permission entry contains `risk_rating_by_vendor`, `risk_rating_collector`,
 - `risk_rating_by_vendor` — the vendor's explicit label, or `"UNRATED"` when the vendor did not publish a risk rating for this permission.
 - `risk_rating_collector` — the Permission Collector's own derived classification; always populated. Use this as the baseline for the delta comparison when `risk_rating_by_vendor` is `"UNRATED"`.
 
-**Partition entries by `normalization_confidence` before proceeding:**
+**If `focus_permission_id` is provided**, filter `permissions[]` immediately:
+```
+permissions = [p for p in permissions if p.id == focus_permission_id]
+```
+The filtered list will have exactly one entry. Skip the confidence partition below — the orchestrator has already validated that this entry is evaluable. Proceed directly to Step 1. When done, return the single finding as inline JSON and **do not write a file to disk**.
+
+**Partition entries by `normalization_confidence` before proceeding** (full-file mode only):
 
 ```
 evaluable      = [p for p in permissions if p.normalization_confidence >= 0.75]

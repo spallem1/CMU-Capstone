@@ -138,53 +138,125 @@ If `match` is **`false`** for any file:
 - Record it in `collection_errors` for the final report: `"Normalized file <path> excluded: snapshot has <snapshot_count> entries for this source but normalized file has <normalized_count>. Re-run the Permission Collector for this source."`
 - Proceed with only the files whose counts match. If no files pass the check, stop and report the errors rather than spawning sub-agents with no valid input.
 
-## Step 3 — Parallel analysis
+### Step 2c — Extract permissions and brief the user
 
-For **each** normalized file from Step 2, spawn the following two sub-agents **in the same response** (parallel Agent tool calls):
+For each normalized file that passed the count check, use the **Read tool** to load the full file. Extract:
+- `permissions[]` — the complete list of entries
+- `saas` — the vendor display name
+- `normalization_confidence_summary.flagged_low` — count of unverified entries
 
-### Policy-Driven Reclassification Agent prompt template:
+Tell the user:
+
+> **📋 `<saas>` — `<N>` permissions collected.**
+>
+> ```
+>  1. `scope_name`  (collector: RATING)
+>  2. `scope_name`  (collector: RATING)
+>  ...
+> ```
+
+If `flagged_low > 0`, note:
+> ⚠️ `<N>` entries have `normalization_status: "unverified"` (confidence < 0.70) — these will be skipped during policy evaluation.
+
+If `total_permissions > 30`, also note:
+> **Large permission set (`<N>` entries).** Sequential evaluation will spawn up to `<2N>` agent calls. Provide `focus_roles` at intake to narrow scope if you want faster results.
+
+## Step 3 — Sequential per-permission analysis
+
+Process each permission **one at a time** in order. Maintain two running lists in memory: `all_findings[]` and `all_hints[]`.
+
+Let `evaluable` = permissions where `normalization_status != "unverified"` and `normalization_confidence >= 0.75`. Let `N` = count of evaluable permissions.
+
+For each permission `p` at evaluable-list index `i` (1-indexed):
+
+### 3a — Announce
+
+Output to the user:
+```
+🔍 [i/N]  `p.scope_name`
+   Collector: p.risk_rating_collector  |  Vendor: p.risk_rating_by_vendor
+   Actions: p.actions joined with ", "  |  Manages perms: p.manages_user_permissions
+```
+
+### 3b — Spawn sub-agents in parallel
+
+In **a single response**, spawn the Policy-Driven Reclassification Agent and the Historical Context Analyst Agent as **two simultaneous Agent tool calls**:
+
+**Policy Agent prompt:**
 ```
 You are the Policy-Driven Reclassification Agent. Evaluate this normalized permissions file:
 - normalized_file: <normalized_file_path>
 - scope: <scope>
+- focus_permission_id: <p.id>
 - top_k: 5
 
-The vector store at policy-reclassification/vector_store/ is already indexed with NIST/CSA
-policy rules. Follow your agent instructions exactly. Write findings to
-policy-reclassification/findings/<scope-slug>-<timestamp>.json and return the full findings
-JSON inline so I can use it without reading the file.
+The vector store at policy-reclassification/vector_store/ is already indexed.
+Follow your agent instructions. Only evaluate the permission with id "<p.id>" — skip
+all others. Return the single finding inline as JSON. Do NOT write any file to disk.
 ```
 
-### Historical Context Analyst Agent prompt template:
+**Historical Context Analyst prompt:**
 ```
-You are the Historical Context Analyst Agent. Search the decision store for precedents
-relevant to this normalized permissions file:
+You are the Historical Context Analyst Agent. Search for precedents for this permission:
 - normalized_file: <normalized_file_path>
 - scope: <scope>
+- focus_permission_id: <p.id>
 
-The vector store at historical-context-analyst/vector_store/ is already indexed with past
-analyst decisions. Follow your agent instructions exactly. Write analysis to
-historical-context-analyst/analysis/<scope-slug>-<timestamp>.json and return the full
-analysis JSON inline so I can use it without reading the file.
+The vector store at historical-context-analyst/vector_store/ is already indexed.
+Follow your agent instructions. Only analyse the permission with id "<p.id>".
+Return the single hint (or no-precedent note) inline as JSON. Do NOT write any file to disk.
 ```
 
-If there are multiple normalized files, spawn one pair of agents per file, all in parallel.
+Wait for both agents to return before continuing.
 
-Wait for all parallel agents to return before proceeding to Step 4.
+### 3c — Report result
+
+Apply the Step 4b decision matrix to the returned finding + hint to determine `orchestrator_signal` and `evidence_strength` for this permission. Then output to the user:
+
+```
+✅ [i/N]  `p.scope_name`
+   Policy: policy_severity  (direction)  |  Rules: triggered rule IDs or "none fired"
+   Signal: orchestrator_signal  |  Evidence: evidence_strength
+   History: agreed_rating  (confidence, N decisions)  — or "No precedents"
+```
+
+For `policy_gap` permissions use:
+```
+⚠️  [i/N]  `p.scope_name`  — POLICY GAP
+   Best speculative match: rule_id  @  similarity_score  (below 0.65 threshold)
+```
+
+### 3d — Accumulate
+
+Append the resolved finding (with `orchestrator_signal` and `evidence_strength` added) to `all_findings[]`.
+Append the hint (or the no-precedent entry) to `all_hints[]`.
+
+Repeat 3a–3d for the next permission. After the last permission, output a completion line:
+
+```
+✅ Done — all N permissions evaluated. Building synthesis…
+```
+
+Then proceed to Step 4.
 
 ## Step 4 — Synthesize
 
 ### 4a. Collect low-confidence entries
 
-Before building the synthesis table, scan every reclassification findings file for `low_confidence_skipped[]`. Aggregate these into a single list — these entries were excluded from policy evaluation by the reclassification agent because their normalization was too uncertain to produce reliable findings.
+The `low_confidence_entries` list is built from the normalized file(s) directly — entries with `normalization_status: "unverified"` that were skipped during Step 3. Read these from the normalized file and store as **`low_confidence_entries`** for the Errors & Gaps section.
 
-Also check the normalized files directly: any entry with `normalization_confidence: "low"` that does not appear in `low_confidence_skipped` (e.g., because the reclassification agent was not run for that file) should be added to this list.
+### 4a-ii. Write combined output files
 
-Store this list as **`low_confidence_entries`** — it will populate the Errors & Gaps section of the report.
+Before synthesizing the report, write the accumulated results from Step 3 to disk:
+
+- `policy-reclassification/findings/<scope-slug>-<timestamp>.json` — assemble from `all_findings[]` into the standard findings JSON structure (same schema as a single-run findings file, with `findings[]` containing all per-permission results).
+- `historical-context-analyst/analysis/<scope-slug>-<timestamp>.json` — assemble from `all_hints[]` into the standard analysis JSON structure.
+
+Use the same `<scope-slug>-<timestamp>` as the Markdown report (Step 5). These files are the permanent record that the HTML generator (Step 6) reads.
 
 ### 4b. Build the permission synthesis table
 
-For each permission across all normalized files, combine:
+For each permission, the finding is already in `all_findings[]` and the hint is in `all_hints[]` from Step 3. Combine:
 - **Vendor rating**: `risk_rating_by_vendor` from the normalized file
 - **Policy severity**: `reclassification.policy_severity` from the reclassification findings
 - **Policy direction**: `reclassification.direction` (`upgraded` / `downgraded` / `unchanged`)
