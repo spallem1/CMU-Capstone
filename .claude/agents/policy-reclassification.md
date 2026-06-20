@@ -55,16 +55,30 @@ Finding + Remediation
 | `nist-sp-800-171-cui-protection.json` | NIST SP 800-171 Rev 2 | CUI-3.1–CUI-3.13 |
 | `csa-ccm-v4-data-security.json` | CSA CCM v4 DSP | DSP-01–DSP-10 |
 
-## Step 0 — Read the normalized file
+## Step 0 — Read the normalized file and partition entries
 
 Use the **Read tool** to load `normalized_file`. Extract:
 - `permissions[]` — the list of permission entries to evaluate
 - `source_type` — for context in justifications
 - `risk_rating_by_vendor_summary` — for the final summary
 
-Each permission entry already contains `risk_rating_by_vendor`, `action_type`, `scope_level`,
-`manages_user_permissions`, and `is_org_level` — these are the fields the retriever and trigger
-evaluator use directly. Do not re-derive them.
+Each permission entry contains `risk_rating_by_vendor`, `risk_rating_collector`, `action_type`,
+`scope_level`, `manages_user_permissions`, and `is_org_level` — use these directly.
+
+- `risk_rating_by_vendor` — the vendor's explicit label, or `"UNRATED"` when the vendor did not publish a risk rating for this permission.
+- `risk_rating_collector` — the Permission Collector's own derived classification; always populated. Use this as the baseline for the delta comparison when `risk_rating_by_vendor` is `"UNRATED"`.
+
+**Partition entries by `normalization_confidence` before proceeding:**
+
+```
+evaluable      = [p for p in permissions if p.normalization_confidence >= 0.75]
+low_confidence = [p for p in permissions if p.normalization_confidence <  0.75]
+```
+
+- Run Steps 1–5 only on `evaluable` entries.
+- Do **not** run the retriever on `low_confidence` entries — feeding ambiguous input to the RAG pipeline produces confidently wrong findings.
+- Record `low_confidence` entries in the output under `low_confidence_skipped` (see output format).
+- If all entries are low-confidence, skip Steps 1–5 entirely, set `rag_enabled: false`, and return only the `low_confidence_skipped` section with a note.
 
 ## Step 1 — Confirm the vector store is ready
 
@@ -115,6 +129,15 @@ The retriever returns a JSON object with `retrieved_rules`, each containing:
 - `compensating_controls` — controls that reduce residual risk
 - `similarity_score` — cosine similarity (0–1)
 
+**Two-stage similarity classification**: After retrieval, partition rules by `similarity_score`:
+
+| Score | Tag | Meaning |
+|-------|-----|---------|
+| `< 0.65` | `match_type: "speculative"` | Rule is topically adjacent but may not logically apply — proceed to trigger evaluation but flag result as speculative. |
+| `≥ 0.65` | `match_type: "confirmed"` | Rule is strongly relevant — apply trigger evaluation normally. |
+
+Carry `match_type` into Step 3 trigger evaluation and into each `triggered_rules` entry in the output.
+
 ## Step 3 — Evaluate each permission against its retrieved rules
 
 For each retrieved rule, check whether the permission's fields satisfy the rule's `triggers`:
@@ -147,6 +170,13 @@ MEDIUM risky / privileged       >  LOW                        >  compliant (INFO
 If no rules fire (or all similarity scores < 0.25), set `policy_severity` to `"INFO"` and
 `classification` to `"compliant"`.
 
+**All-speculative case**: If at least one rule fires but every fired rule has `match_type: "speculative"`, set:
+- `direction: "insufficient_evidence"` (not `"upgraded"` / `"downgraded"` / `"unchanged"`)
+- `policy_severity`: use the highest severity from the speculative fired rules (for reference only — not a reclassification)
+- `delta: false`
+- `classification`: as normally determined from fired rules
+- Include a note in `justification`: "Policy coverage is speculative: no retrieved rule exceeded the 0.65 similarity threshold for this permission. Findings are indicative only."
+
 Map to output `classification`:
 - `privileged_and_risky` → `"policy_violation"` with `privileged: true, risky: true`
 - `privileged` → `"over_privileged"` with `privileged: true, risky: false`
@@ -155,19 +185,23 @@ Map to output `classification`:
 
 ## Step 5 — Determine the reclassification delta
 
-Compare `policy_severity` against `risk_rating_by_vendor` using this severity order:
-`CRITICAL > HIGH > MEDIUM > LOW > INFO`
+Severity order: `CRITICAL > HIGH > MEDIUM > LOW > INFO`
+
+**Choose the baseline** for comparison:
+- If `risk_rating_by_vendor != "UNRATED"` → use `risk_rating_by_vendor` as baseline
+- If `risk_rating_by_vendor == "UNRATED"` → use `risk_rating_collector` as baseline; record `vendor_rating: "UNRATED (collector: <risk_rating_collector>)"` in the finding
 
 | Result | Condition | Meaning |
 |--------|-----------|---------|
-| `"upgraded"` | `policy_severity` is higher than `risk_rating_by_vendor` | Vendor underestimated risk — this finding needs immediate attention |
-| `"downgraded"` | `policy_severity` is lower than `risk_rating_by_vendor` | Vendor was conservative — context suggests lower risk in this deployment |
-| `"unchanged"` | Both are the same severity level | Vendor and policy agree |
+| `"upgraded"` | `policy_severity` is higher than the baseline | Baseline under-estimated risk — needs immediate attention |
+| `"downgraded"` | `policy_severity` is lower than the baseline | Baseline was conservative — context suggests lower risk |
+| `"unchanged"` | Both are the same severity level | Baseline and policy agree |
+| `"no_vendor_baseline"` | `risk_rating_by_vendor == "UNRATED"` AND `policy_severity` matches `risk_rating_collector` | Vendor didn't rate it; collector and policy concur |
 
-Set `delta: true` when direction is `upgraded` or `downgraded`; `false` when `unchanged`.
+Set `delta: true` when direction is `upgraded` or `downgraded`; `false` for `unchanged` or `no_vendor_baseline`.
 
 Upgraded permissions are the primary output of this agent — they represent permissions the
-vendor rated as acceptable that policy analysis flags as higher risk.
+vendor (or collector, when unrated) rated as acceptable that policy analysis flags as higher risk.
 
 ## Classification model
 
@@ -218,7 +252,7 @@ Return **only** the following JSON:
       "reclassification": {
         "vendor_rating": "<the risk_rating_by_vendor from the normalized file>",
         "policy_severity": "<the severity determined by fired rules>",
-        "direction": "<upgraded | downgraded | unchanged>",
+        "direction": "<upgraded | downgraded | unchanged | insufficient_evidence>",
         "delta": true
       },
       "triggered_rules": [
@@ -229,7 +263,8 @@ Return **only** the following JSON:
           "control_ref": "<e.g. AC-6 Least Privilege>",
           "classification": "<privileged_and_risky>",
           "severity": "<CRITICAL>",
-          "similarity_score": 0.87
+          "similarity_score": 0.87,
+          "match_type": "<confirmed | speculative>"
         }
       ],
       "recommendation": "<specific remediation action>",
@@ -244,6 +279,16 @@ Return **only** the following JSON:
       "affected_permission_ids": [],
       "standard_refs": ["<AC-6>", "<ZTA-001>"],
       "estimated_effort": "<low | medium | high>"
+    }
+  ],
+  "low_confidence_skipped": [
+    {
+      "permission_id": "<id>",
+      "scope_name": "<vendor scope name>",
+      "actions": ["<action>"],
+      "normalization_confidence": 0.0,
+      "normalization_notes": ["<reason>"],
+      "reason": "Excluded from policy evaluation: normalization_confidence is low. The entry cannot be accurately represented in the schema — policy analysis would produce unreliable findings. Recommend manual review and re-collection with higher fidelity source data."
     }
   ]
 }

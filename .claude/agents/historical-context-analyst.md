@@ -95,26 +95,39 @@ The retriever returns a JSON object with `matched_decisions`, each containing:
 - `actions`, `principal_type`, `scope_level`, `manages_user_permissions`
 - `vendor_rating`, `policy_severity`, `analyst_final_rating`, `override_direction`
 - `rationale`, `compensating_controls`
+- `analyst_confidence` — `high` / `medium` / `low` (may be absent in older decisions)
 - `similarity_score` — cosine similarity (0–1); decisions below 0.30 are already filtered out
+
+**TTL check**: For each matched decision, check whether it has expired:
+- If `review_due` is present and `review_due < today`: mark with `status: "expired"`. Exclude from consensus computation but still include in `matched_decisions` with `status: "expired"` so the analyst can see the history.
+- If `review_due` is absent or `review_due >= today`: mark with `status: "active"`.
+- Track the count of excluded decisions in `summary.expired_decisions_excluded`.
 
 ## Step 3 — Synthesise hints per permission
 
 For each permission that has at least one matched decision, determine:
 
-**Consensus rating**: The `analyst_final_rating` that appears most frequently across matched decisions.
+Only use **active** decisions (not expired) for consensus computation.
+
+**Quality-weighted consensus**: Weight each decision by `analyst_confidence`:
+- `high` → weight 3
+- `medium` → weight 2
+- `low` or absent → weight 1
+
+**Consensus rating**: The `analyst_final_rating` with the highest total weight across active matched decisions.
 If there is a tie, prefer the higher severity.
 
 **Confidence level**:
 | Condition | Confidence |
 |-----------|------------|
-| All matched decisions agree on the same `analyst_final_rating` | `high` |
-| Majority (> 50%) agree | `medium` |
+| All active matched decisions agree on the same `analyst_final_rating` | `high` |
+| Majority (> 50% of total weight) agrees | `medium` |
 | Matched decisions are split | `low` |
-| Only 1 decision matched | `low` |
+| Only 1 active decision matched | `low` |
 
 **Override direction consensus**:
-Count how many past decisions were `upgrade`, `downgrade`, `confirmed`, or `accepted`.
-The most common direction is the `consensus_direction`.
+Count weighted votes for each direction (`upgrade`, `downgrade`, `confirmed`, `accepted`) across active decisions.
+The direction with the highest weighted vote total is the `consensus_direction`.
 
 **Hint text** (plain English, for the orchestrator to show the analyst):
 ```
@@ -137,6 +150,7 @@ The most common direction is the `consensus_direction`.
     "total_permissions_analysed": 0,
     "with_precedents": 0,
     "without_precedents": 0,
+    "expired_decisions_excluded": 0,
     "consensus_upgrades": 0,
     "consensus_downgrades": 0,
     "consensus_confirmed": 0,
@@ -155,7 +169,10 @@ The most common direction is the `consensus_direction`.
           "decision_id": "<e.g. dec-aws-001>",
           "batch_id": "<e.g. aws-iam-2026-01>",
           "decided_at": "<ISO date>",
+          "review_due": "<ISO date | null>",
+          "status": "<active | expired>",
           "analyst": "<email>",
+          "analyst_confidence": "<high | medium | low | null>",
           "analyst_final_rating": "<CRITICAL | HIGH | MEDIUM | LOW | INFO>",
           "override_direction": "<upgrade | downgrade | confirmed | accepted>",
           "rationale": "<analyst rationale>",
@@ -187,7 +204,10 @@ Write output to `historical-context-analyst/analysis/<scope-slug>-<timestamp>.js
 
 ## Rules
 - Permissions with no matched decisions (or all similarity scores < 0.30) go into `permissions_without_precedents` — do not fabricate hints.
+- Expired decisions (`review_due < today`) are excluded from consensus computation. They still appear in `matched_decisions` with `status: "expired"` for audit visibility.
+- Permissions where all matched decisions are expired should move to `permissions_without_precedents` with a note: "All matched decisions have passed their review_due date and were excluded from consensus."
 - Sort `permission_hints` by `consensus.confidence` descending, then `total_decisions` descending.
 - The `hint` field must be concrete: include the action, the agreed rating, the override direction, and the key rationale sentence. No vague statements.
 - If the decision store is empty, return a valid output with empty hints and note in the summary.
 - Do not re-evaluate policy compliance — that is the Policy Reclassification Agent's job. You only surface what past analysts decided.
+- Use quality-weighted voting for consensus (weight: high=3, medium=2, low/absent=1). An unweighted tie broken by higher severity is only the fallback when weights are also tied.

@@ -1,0 +1,471 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "paa-normalized-permission-schema-v2.0",
+  "title": "PAA Normalized Permission File",
+  "description": "Normalized schema for any permission, scope, or role across any platform. Produced by the PAA Permission Collector agent. Null values indicate the field is not applicable to that permission system or entry.",
+
+  "$defs": {
+
+    "RiskRating": {
+      "type": "string",
+      "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"],
+      "description": "PAA risk tier. CRITICAL = wildcard admin; HIGH = wildcard action or write+wildcard resource; MEDIUM = write/delete on named resource; LOW = read-only on named resource; INFO = deny effect."
+    },
+
+    "RiskRatingWithUnrated": {
+      "type": "string",
+      "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO", "UNRATED"],
+      "description": "Vendor-provided risk label normalised to PAA tiers. Set to UNRATED when the vendor publishes no risk label for this permission — never derive or infer this value."
+    },
+
+    "ActionType": {
+      "type": "object",
+      "description": "Boolean map of operation categories this permission enables. Set each field to true if any of the permission's actions match that category's patterns.",
+      "additionalProperties": false,
+      "properties": {
+        "read":               { "type": "boolean", "description": "get, list, watch, describe, view, read, show, head, select, query" },
+        "write":              { "type": "boolean", "description": "put, create, update, write, push, set, patch, apply, upload, modify, publish, send, post" },
+        "delete":             { "type": "boolean", "description": "delete, remove, drop, destroy, terminate, deregister, revoke, purge, archive" },
+        "admin":              { "type": "boolean", "description": "admin, root, FullAccess, *, superuser, owner, manage, configure, settings, administer" },
+        "manage_permissions": { "type": "boolean", "description": "iam:, roles/iam., Microsoft.Authorization/, rolebinding, grant, acl, permission, entitlement, assign, profile" },
+        "cross_account":      { "type": "boolean", "description": "sts:AssumeRole with a different-account principal; cross-org trust conditions" },
+        "network":            { "type": "boolean", "description": "network, vpc, subnet, firewall, loadbalancer, dns, route, ingress, webhook" },
+        "compute":            { "type": "boolean", "description": "compute, virtualMachines, ec2, gce, container, pod, node, function, lambda, codespace, workflow" },
+        "storage":            { "type": "boolean", "description": "storage, s3, gcs, blob, bucket, disk, volume, filesystem, packages, gist" },
+        "data_plane":         { "type": "boolean", "description": "DataActions (Azure), data., blobs, objects, rows, tables, streams, records, content, payload" }
+      }
+    },
+
+    "SnapshotCountCheck": {
+      "type": "object",
+      "description": "Integrity check: compares the raw snapshot entry count for this source against the normalized permissions[] count. A mismatch means entries were lost or duplicated during normalization — the orchestrator must exclude this file from downstream agents.",
+      "required": ["snapshot_count", "normalized_count", "match"],
+      "additionalProperties": false,
+      "properties": {
+        "snapshot_count": {
+          "type": "integer",
+          "description": "Number of entries in the raw snapshot whose source_file matches this normalized file's source."
+        },
+        "normalized_count": {
+          "type": "integer",
+          "description": "Number of entries in the permissions[] array of this normalized file."
+        },
+        "match": {
+          "type": "boolean",
+          "description": "True when snapshot_count == normalized_count."
+        }
+      }
+    },
+
+    "RiskRatingSummary": {
+      "type": "object",
+      "description": "Count of permissions at each PAA collector-derived risk tier.",
+      "additionalProperties": false,
+      "properties": {
+        "CRITICAL": { "type": "integer", "default": 0 },
+        "HIGH":     { "type": "integer", "default": 0 },
+        "MEDIUM":   { "type": "integer", "default": 0 },
+        "LOW":      { "type": "integer", "default": 0 },
+        "INFO":     { "type": "integer", "default": 0 }
+      }
+    },
+
+    "RiskRatingSummaryWithUnrated": {
+      "type": "object",
+      "description": "Count of permissions at each vendor-provided risk tier, including UNRATED for platforms that publish no risk labels.",
+      "additionalProperties": false,
+      "properties": {
+        "CRITICAL": { "type": "integer", "default": 0 },
+        "HIGH":     { "type": "integer", "default": 0 },
+        "MEDIUM":   { "type": "integer", "default": 0 },
+        "LOW":      { "type": "integer", "default": 0 },
+        "INFO":     { "type": "integer", "default": 0 },
+        "UNRATED":  { "type": "integer", "default": 0 }
+      }
+    },
+
+    "Permission": {
+      "type": "object",
+      "required": [
+        "id",
+        "scope_name",
+        "name",
+        "description",
+        "permission_system",
+        "category",
+        "actions",
+        "risk_rating_by_vendor",
+        "risk_rating_collector",
+        "normalization_confidence"
+      ],
+      "additionalProperties": false,
+      "properties": {
+
+        "id": {
+          "type": "string",
+          "description": "Unique identifier within this normalized file. Format: '<vendor>-<permission_name_slugified>-<sequential_number>'. Examples: 'gh-oauth-001', 'okta-users-manage-007', 'aws-s3-putbucketpolicy-042'."
+        },
+
+        "scope_name": {
+          "type": "string",
+          "description": "The permission identifier exactly as the vendor spells it — never slugified or transformed. Examples: 'repo', 'admin:org', 's3:PutBucketPolicy', 'okta.users.manage', 'Microsoft.Storage/storageAccounts/write'. For cloud IAM this is the action name; for SaaS this is the OAuth scope or API permission name."
+        },
+
+        "name": {
+          "type": "string",
+          "description": "Human-readable display name for the permission. May be the same as scope_name when the vendor provides no separate display name."
+        },
+
+        "description": {
+          "type": "string",
+          "description": "Verbatim vendor description of what this permission allows. Must always be populated — copy the vendor's exact wording. If no description exists in the source, synthesize one sentence from surrounding context and prefix it with '[inferred] '."
+        },
+
+        "permission_system": {
+          "type": "string",
+          "description": "Which permission system this entry belongs to within the platform. Use snake_case. Examples: 'oauth2_scopes', 'admin_role_permissions', 'iam_policies', 'rbac_cluster_roles', 'repository_permissions'."
+        },
+
+        "category": {
+          "type": "string",
+          "description": "Functional domain grouping within the permission system. Examples: 'repositories', 'organization', 'user', 'packages', 'security', 'workflows', 'billing', 'identity'."
+        },
+
+        "subcategory": {
+          "type": ["string", "null"],
+          "description": "Second-level grouping when the permission system has named sub-types. Examples: 'hooks', 'keys', 'statuses'. Null if not applicable."
+        },
+
+        "principal": {
+          "type": ["string", "null"],
+          "description": "The actual principal this permission applies to. Use '*' when the permission applies to any user or service granted the scope. Use the role or group name when the source is a role page. Null if indeterminate."
+        },
+
+        "principal_type": {
+          "type": ["string", "null"],
+          "enum": ["user", "role", "group", "service_account", "system", null],
+          "description": "The class of entity that holds this permission. 'system' for OAuth app tokens acting on behalf of a user."
+        },
+
+        "resource_scope": {
+          "type": ["array", "null"],
+          "items": { "type": "string" },
+          "description": "The resource(s) this permission targets, as a list. Use ['*'] for wildcard/all-resources access. Examples: ['repositories_public_private'], ['organization'], ['public_keys'], ['s3_bucket'], ['*']. Null if the permission is a pure identity scope with no resource target (e.g. 'openid', 'email')."
+        },
+
+        "effect": {
+          "type": ["string", "null"],
+          "enum": ["allow", "deny", null],
+          "description": "Whether this permission grants or denies access. Null if the concept does not apply (e.g. OAuth scopes are always allow)."
+        },
+
+        "actions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Namespaced operation strings this permission enables. Format: '<vendor>:<scope_name>'. Examples: ['github:repo'], ['github:admin:org'], ['aws:s3:PutBucketPolicy'], ['okta:okta.users.manage']. Empty array only if the permission is a pure identity/OIDC scope with no discrete operations."
+        },
+
+        "conditions": {
+          "type": ["object", "null"],
+          "description": "IAM or policy conditions attached to this permission entry (e.g. IP restrictions, MFA requirements, resource tag constraints). Empty object {} when the permission has no conditions. Null if conditions are not a concept in this permission system.",
+          "additionalProperties": true
+        },
+
+        "risk_rating_by_vendor": {
+          "$ref": "#/$defs/RiskRatingWithUnrated",
+          "description": "The vendor's own explicit risk/sensitivity label, normalised to PAA tiers. Set to 'UNRATED' when the vendor does not publish any risk label for this permission — never derive or infer this value from the permission's actions or resources."
+        },
+
+        "risk_rating_collector": {
+          "$ref": "#/$defs/RiskRating",
+          "description": "The Permission Collector's independent risk classification, derived from the normalization rules. Always populated regardless of whether the vendor provided a rating."
+        },
+
+        "risk_factors": {
+          "type": ["array", "null"],
+          "items": { "type": "string" },
+          "description": "Risk signal tags detected during normalization. Examples: 'wildcard_resource', 'admin_privilege', 'manages_permissions', 'cross_account', 'delete_access', 'pii_data', 'supply_chain_risk', 'token_escalation_risk', 'webhook_exfiltration_risk', 'undetermined'. Null if no signals detected."
+        },
+
+        "action_type": {
+          "oneOf": [
+            { "$ref": "#/$defs/ActionType" },
+            { "type": "null" }
+          ],
+          "description": "Structured boolean map of operation categories this permission enables. Null if classification was not performed."
+        },
+
+        "scope_level": {
+          "type": ["string", "null"],
+          "enum": ["org", "account", "management_group", "cluster", "namespace", "resource", "wildcard", null],
+          "description": "The breadth of resources this permission applies to. 'org': entire tenant/org/workspace. 'account': specific user account or sub-account. 'management_group': Azure management group. 'cluster': Kubernetes cluster-wide. 'namespace': Kubernetes namespace. 'resource': specific named resource type. 'wildcard': applies to all resources with no scoping qualifier."
+        },
+
+        "is_org_level": {
+          "type": ["boolean", "null"],
+          "description": "True when the permission operates at organization/tenant scope — affects all members, teams, or repositories in the org. Null if the concept does not apply."
+        },
+
+        "is_resource_level": {
+          "type": ["boolean", "null"],
+          "description": "True when the permission is scoped to a specific named resource rather than wildcard or org-wide. Null if the concept does not apply."
+        },
+
+        "manages_user_permissions": {
+          "type": ["boolean", "null"],
+          "description": "True when this permission grants the ability to create, modify, or delete other users' access rights (IAM assignments, RBAC bindings, collaborator grants, role memberships). Null if not applicable."
+        },
+
+        "normalization_confidence": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "P(True) self-evaluation score: how accurately this entry was normalized. Computed as (action_clarity + schema_fit + risk_accuracy) / 3 where each dimension is scored 0.25 / 0.50 / 0.75 / 1.0. Entries below 0.75 are excluded from downstream policy and historical agents and surfaced in the Errors & Gaps report section."
+        },
+
+        "normalization_notes": {
+          "type": ["array", "null"],
+          "items": { "type": "string" },
+          "description": "Per-dimension notes for any scoring dimension that fell below 0.75. Each entry names the dimension, its score, and a one-line reason. Empty array when normalization_confidence >= 0.75. Null if self-evaluation was not performed."
+        },
+
+        "applicable_resources": {
+          "type": ["array", "null"],
+          "items": { "type": "string" },
+          "description": "Specific resource types or targets this permission can be scoped to. More granular than resource_scope. Examples: ['All users', 'All users within a specific group', 'A specific app']. Null if not applicable."
+        },
+
+        "principals": {
+          "type": ["array", "null"],
+          "items": { "type": "string" },
+          "description": "Types of entities that can hold or be granted this permission. Common values: 'users', 'groups', 'service_apps', 'client_apps', 'workloads'. Null if not defined by the platform."
+        },
+
+        "grant_types": {
+          "type": ["array", "null"],
+          "items": {
+            "type": "string",
+            "enum": ["authorization_code", "client_credentials", "implicit", "device_code", "refresh_token", "saml2", "jwt_bearer"]
+          },
+          "description": "OAuth 2.0 grant types via which this scope can be requested. Relevant for OAuth2-based permission systems (e.g. GitHub OAuth, Okta). Null for non-OAuth2 systems."
+        },
+
+        "user_consent_required": {
+          "type": ["boolean", "null"],
+          "description": "Whether end-user consent must be explicitly granted before this scope can be issued. True for delegated user flows (authorization_code); false for machine-to-machine (client_credentials). Null if not applicable."
+        },
+
+        "assignable_in": {
+          "type": ["array", "null"],
+          "items": { "type": "string" },
+          "description": "Role constructs or contexts in which this permission can be assigned. Examples: ['custom_roles', 'iam_based_standard_roles']. Null if the permission is not individually assignable."
+        },
+
+        "bundled_in_roles": {
+          "type": ["array", "null"],
+          "items": { "type": "string" },
+          "description": "Pre-built roles or standard role IDs that include this permission by default. Examples: ['SUPER_ADMIN', 'ORG_ADMIN']. Null if not tracked or not applicable."
+        },
+
+        "included_permissions": {
+          "type": ["array", "null"],
+          "items": { "type": "string" },
+          "description": "IDs of permissions implicitly granted when this permission is granted (parent grants children). Example: scope 'repo' implicitly includes 'repo:status', 'repo_deployment', 'repo:invite', 'security_events'. Null if no implicit grants exist."
+        },
+
+        "related_permissions": {
+          "type": ["array", "null"],
+          "items": { "type": "string" },
+          "description": "IDs of permissions recommended to pair with this one for typical use cases (not automatically granted). Null if none."
+        },
+
+        "who_can_assign": {
+          "type": ["array", "null"],
+          "items": { "type": "string" },
+          "description": "Role IDs or principal types authorized to grant this permission to others. Null if governed by a general admin policy rather than per-permission rules."
+        },
+
+        "conditions_supported": {
+          "type": ["boolean", "null"],
+          "description": "Whether this permission supports attribute-level conditions to further narrow its scope. Null if not applicable."
+        },
+
+        "access_levels": {
+          "type": ["array", "null"],
+          "items": { "type": "string" },
+          "description": "Distinct access tiers this permission supports, ordered least to most permissive. Examples: ['read', 'write'], ['none', 'read', 'write', 'admin']. Applicable when a single permission can be granted at different intensities (e.g. GitHub fine-grained PATs, AWS IAM actions). Null if the permission is binary."
+        },
+
+        "hierarchy_level": {
+          "type": ["integer", "null"],
+          "description": "Numeric rank in a cumulative role hierarchy where higher numbers include all permissions of lower numbers. Use 1 for least-privileged. Examples: GitHub repo roles Read=1, Triage=2, Write=3, Maintain=4, Admin=5. Null if the permission system is not hierarchical."
+        },
+
+        "release_version": {
+          "type": ["string", "null"],
+          "description": "Product version, API version, or date string indicating when this permission was introduced. Null if undocumented."
+        },
+
+        "deprecated": {
+          "type": ["boolean", "null"],
+          "description": "True when the vendor has announced this permission is end-of-life or a preferred replacement exists. Null if deprecation status is undocumented."
+        },
+
+        "source_url": {
+          "type": ["string", "null"],
+          "format": "uri",
+          "description": "URL of the specific documentation page where this permission is defined. Null if no per-permission page exists — use the top-level source_urls array in that case."
+        },
+
+        "notes": {
+          "type": ["string", "null"],
+          "description": "Additional context: caveats, feature flag requirements, known limitations, or behavioral edge cases not captured elsewhere. Null if none."
+        }
+
+      }
+    },
+
+    "PermissionSystem": {
+      "type": "object",
+      "required": ["id", "description", "applies_to", "principals"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identifier matching the permission_system field on permissions in this system."
+        },
+        "description": {
+          "type": "string",
+          "description": "What this permission system controls and how it works."
+        },
+        "applies_to": {
+          "type": "string",
+          "description": "What this system is used to control access to."
+        },
+        "principals": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Types of entities that can hold permissions in this system."
+        }
+      }
+    }
+
+  },
+
+  "type": "object",
+  "required": ["saas", "source_urls", "source_type", "collected_at", "schema_version", "permissions"],
+  "properties": {
+
+    "saas": {
+      "type": "string",
+      "description": "Name of the SaaS platform or cloud provider. Examples: 'GitHub', 'Okta', 'AWS', 'GCP', 'Azure', 'Kubernetes'."
+    },
+
+    "source_urls": {
+      "type": "array",
+      "items": { "type": "string", "format": "uri" },
+      "description": "Public documentation URLs used to derive this permission set. One entry per fetched page."
+    },
+
+    "source_type": {
+      "type": "string",
+      "enum": ["aws_iam", "gcp_iam", "azure_rbac", "kubernetes_rbac", "github", "saas_docs", "local_files", "generic"],
+      "description": "The collection strategy and platform type used by the Permission Collector."
+    },
+
+    "collected_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 datetime when this file was produced by the Permission Collector."
+    },
+
+    "last_updated": {
+      "type": ["string", "null"],
+      "format": "date",
+      "description": "ISO 8601 date when the vendor's documentation was last known to have changed. Null if not tracked."
+    },
+
+    "schema_version": {
+      "type": "string",
+      "description": "Version of this schema definition. Current: '2.0'."
+    },
+
+    "total_permissions": {
+      "type": ["integer", "null"],
+      "description": "Total number of entries in permissions[]. Convenience count for quick validation."
+    },
+
+    "snapshot_count_check": {
+      "oneOf": [
+        { "$ref": "#/$defs/SnapshotCountCheck" },
+        { "type": "null" }
+      ],
+      "description": "Integrity check populated after normalization completes. Null if the check was not run."
+    },
+
+    "risk_rating_by_vendor_summary": {
+      "oneOf": [
+        { "$ref": "#/$defs/RiskRatingSummaryWithUnrated" },
+        { "type": "null" }
+      ],
+      "description": "Count of permissions at each vendor-provided risk tier. UNRATED will equal total_permissions for platforms that publish no risk ratings (AWS, GCP, Azure, GitHub OAuth)."
+    },
+
+    "risk_rating_collector_summary": {
+      "oneOf": [
+        { "$ref": "#/$defs/RiskRatingSummary" },
+        { "type": "null" }
+      ],
+      "description": "Count of permissions at each PAA collector-derived risk tier."
+    },
+
+    "normalization_confidence_summary": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "description": "File-level summary of the P(True) self-evaluation scores across all permissions.",
+      "properties": {
+        "flagged_low": {
+          "type": "integer",
+          "description": "Count of entries where normalization_confidence < 0.75. These are excluded from downstream agents."
+        },
+        "mean_score": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Average normalization_confidence across all entries, rounded to 2 decimal places."
+        }
+      }
+    },
+
+    "collection_errors": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "object",
+        "properties": {
+          "source": { "type": "string", "description": "The source URL or file path that caused the error." },
+          "error":  { "type": "string", "description": "Error type. Examples: 'fetch_failed', 'parse_failed', 'count_mismatch'." },
+          "detail": { "type": "string", "description": "Human-readable description of the error." }
+        }
+      },
+      "description": "Errors encountered during collection or normalization. Includes count_mismatch entries from the snapshot integrity check."
+    },
+
+    "permission_systems": {
+      "type": ["array", "null"],
+      "items": { "$ref": "#/$defs/PermissionSystem" },
+      "description": "Metadata about each distinct permission system found in this platform. Null if not catalogued."
+    },
+
+    "notes": {
+      "type": ["array", "null"],
+      "items": { "type": "string" },
+      "description": "Platform-level notes about the permission model that do not fit on individual entries."
+    },
+
+    "permissions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Permission" },
+      "description": "Flat list of all normalized permissions collected from this source."
+    }
+
+  }
+}

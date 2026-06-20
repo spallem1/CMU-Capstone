@@ -129,6 +129,15 @@ From the response, extract:
 - **normalized_file_paths**: list of paths like `permission-collector/normalized/<slug>-<timestamp>.json`
 - If the response does not include explicit paths, use Glob to find the most recently modified file(s) in `permission-collector/normalized/`
 
+### Step 2b — Count integrity check
+
+For each normalized file, read `snapshot_count_check` and verify `match` is `true`.
+
+If `match` is **`false`** for any file:
+- Do **not** pass that file to downstream agents — mismatched counts mean entries were lost or duplicated during normalization, so any policy findings derived from it would be unreliable.
+- Record it in `collection_errors` for the final report: `"Normalized file <path> excluded: snapshot has <snapshot_count> entries for this source but normalized file has <normalized_count>. Re-run the Permission Collector for this source."`
+- Proceed with only the files whose counts match. If no files pass the check, stop and report the errors rather than spawning sub-agents with no valid input.
+
 ## Step 3 — Parallel analysis
 
 For **each** normalized file from Step 2, spawn the following two sub-agents **in the same response** (parallel Agent tool calls):
@@ -165,7 +174,15 @@ Wait for all parallel agents to return before proceeding to Step 4.
 
 ## Step 4 — Synthesize
 
-### 4a. Build the permission synthesis table
+### 4a. Collect low-confidence entries
+
+Before building the synthesis table, scan every reclassification findings file for `low_confidence_skipped[]`. Aggregate these into a single list — these entries were excluded from policy evaluation by the reclassification agent because their normalization was too uncertain to produce reliable findings.
+
+Also check the normalized files directly: any entry with `normalization_confidence: "low"` that does not appear in `low_confidence_skipped` (e.g., because the reclassification agent was not run for that file) should be added to this list.
+
+Store this list as **`low_confidence_entries`** — it will populate the Errors & Gaps section of the report.
+
+### 4b. Build the permission synthesis table
 
 For each permission across all normalized files, combine:
 - **Vendor rating**: `risk_rating_by_vendor` from the normalized file
@@ -186,8 +203,28 @@ Apply this decision matrix to determine the **orchestrator signal** for each per
 | `downgraded` | Conflicts | `conflicting` — flag for analyst decision |
 | `downgraded` | No precedents | `policy_downgrade` — vendor was conservative; note no precedent |
 | Any | No historical analysis available | Use policy signal only; note missing historical data |
+| `direction: "insufficient_evidence"` (all speculative) | Any | `policy_gap` — no confirmed policy coverage; surface in "Permissions Without Policy Coverage" |
 
-### 4b. Merge recommendations
+### 4b-ii. Compute evidence_strength per permission
+
+After assigning the orchestrator signal, compute `evidence_strength` for each permission:
+
+| Condition | evidence_strength |
+|-----------|-----------------|
+| ≥1 fired rule with `match_type: "confirmed"` and `similarity_score ≥ 0.75`, **AND** historical `consensus_direction` matches policy direction, **AND** `normalization_confidence ≥ 0.70` | `"strong"` |
+| Confirmed policy rules (≥1 with `match_type: "confirmed"`) but no active historical matches | `"policy_only"` |
+| Active historical matches exist but all policy rules are speculative or `direction == "insufficient_evidence"` | `"history_only"` |
+| Only speculative policy rules (all `match_type: "speculative"`) OR `normalization_confidence < 0.70` | `"weak"` |
+| Confirmed policy rules AND historical consensus contradicts policy direction | `"conflicting"` |
+
+**`strong_upgrade` gate**: A signal may only be surfaced as `strong_upgrade` when ALL three of these conditions are met:
+1. At least one fired rule has `match_type: "confirmed"` with `similarity_score ≥ 0.75`
+2. Historical `consensus_direction == "upgrade"` with `consensus.confidence == "high"`
+3. `normalization_confidence ≥ 0.70`
+
+If any condition fails, downgrade the signal to `policy_upgrade` and add to the finding: `"strong_upgrade gate not met: <which condition failed>"`.
+
+### 4c. Merge recommendations
 
 Combine `remediation_plan` from the reclassification findings with `recommendations` from
 the historical analyst. Deduplicate by matching `affected_permission_ids`. Where the same
@@ -198,6 +235,8 @@ Sort final list: severity descending → effort ascending (quick wins first with
 ## Step 5 — Write the report
 
 Write to `paa-orchestrator/reports/<scope-slug>-<YYYY-MM-DD>.md`.
+
+After writing the Markdown file, run the HTML report generator (Step 6).
 
 Use this structure:
 
@@ -233,7 +272,7 @@ or conflict with the policy findings.>
 ## Findings
 
 > Permissions sorted by orchestrator signal priority:
-> `conflicting` → `strong_upgrade` → `policy_upgrade` → `vendor_confirmed` → `contextual_downgrade` → `policy_downgrade` → compliant
+> `conflicting` → `strong_upgrade` → `policy_upgrade` → `policy_gap` → `vendor_confirmed` → `contextual_downgrade` → `policy_downgrade` → compliant
 
 For each non-compliant permission, one block:
 
@@ -246,6 +285,7 @@ For each non-compliant permission, one block:
 | Vendor rating | <vendor_rating> |
 | Policy severity | <policy_severity> (<direction>) |
 | Orchestrator signal | <signal> |
+| Evidence strength | <evidence_strength> |
 | Historical consensus | <agreed_rating> (<confidence> confidence, <N> decision(s)) — or "No precedents" |
 
 **Triggered rules:** <rule_id> — <rule_name> (<severity>); ...
@@ -261,7 +301,17 @@ For each non-compliant permission, one block:
 ## Conflicting Signals
 
 <Only present if any permission has orchestrator_signal == "conflicting".>
-<For each: explain what policy says, what historical consensus says, and what the analyst should decide.>
+<For each conflicting permission, include a stakes framing block:>
+
+### <permission_id> — Conflicting Evidence
+
+**Policy says:** <policy_severity> (<direction>) — <summary of triggered rules>
+**History says:** <consensus.agreed_rating> (<consensus.confidence> confidence, <N> decision(s)) — <hint text>
+
+**Stakes framing:**
+- **If policy is correct and this is accepted at vendor rating:** <worst_case_if_policy_correct_and_accepted — e.g. "Unauthorized data exfiltration via overprivileged OAuth token goes undetected">
+- **If history is correct and this is upgraded to policy severity:** <worst_case_if_history_correct_and_upgraded — e.g. "Legitimate read-only integration breaks due to scope reduction; business workflow interrupted">
+- **Minimum to resolve:** <minimum_to_resolve — e.g. "Confirm current usage with the data owner; add audit logging before deciding")
 
 ---
 
@@ -279,18 +329,103 @@ For each non-compliant permission, one block:
 
 ---
 
+## Permissions Without Policy Coverage
+
+<Only include this section when any permission has orchestrator_signal == "policy_gap".>
+These permissions returned only speculative policy rule matches (all similarity scores < 0.65). No confident reclassification can be made from existing policy rules.
+
+| Permission ID | Scope / Action | Vendor Rating | Best Speculative Match | Similarity |
+|---------------|---------------|---------------|------------------------|------------|
+| `<id>` | `<scope_name>` | `<vendor_rating>` | `<rule_id>` | `<score>` |
+
+**Recommended action:** Add policy rules that explicitly address these permission types, or escalate to the policy team for manual classification.
+
+---
+
+## Errors & Gaps
+
+<Only include this section when `low_confidence_entries` is non-empty OR a sub-agent returned an error.>
+
+### Low-Confidence Normalizations
+
+The following permissions were **excluded from policy analysis** because the Permission Collector's self-evaluation scored them below P(True) = 0.75. Feeding ambiguous normalizations into the RAG pipeline would produce confidently wrong findings.
+
+| Permission ID | Scope / Action | Score | Reason |
+|---------------|---------------|-------|--------|
+| `<id>` | `<scope_name>` | `<normalization_score>` | `<normalization_notes joined>` |
+
+**Recommended action:** Re-collect these permissions using a more specific source — e.g., fetch the individual sub-scope documentation pages rather than a single bundled scope page, or request a more granular IAM export.
+
+### Sub-Agent Errors
+
+<If a sub-agent returned an error or partial output, describe what was missing and what impact that has on finding confidence.>
+
+---
+
 *Run `/paa-record-decision` to record your final decisions on these findings.
  Future analyses will use your decisions as precedents via the Historical Context Analyst.*
+
+---
+
+## Evaluation Metrics
+
+| Metric | Value |
+|--------|-------|
+| Permissions analysed | <N> |
+| Unverified normalizations (confidence < 0.70) | <N> |
+| Mean normalization confidence | <0.NN> |
+| Policy coverage | <N>% (<N> of <N> with ≥1 confirmed rule) |
+| Historical coverage | <N>% (<N> of <N> with active precedents) |
+| Evidence strength: strong | <N> |
+| Evidence strength: policy_only | <N> |
+| Evidence strength: history_only | <N> |
+| Evidence strength: weak | <N> |
+| Evidence strength: conflicting | <N> |
+| Policy gaps (insufficient_evidence) | <N> |
+| Expired decisions excluded | <N> |
 ```
 
 ---
+
+## Step 6 — Generate HTML report
+
+After writing the Markdown report in Step 5, generate a self-contained HTML version
+that the user can open directly in a browser.
+
+Collect all findings file paths that were written by the Policy-Driven Reclassification
+Agent(s) in Step 3. Then run:
+
+```bash
+cd "$(git rev-parse --show-toplevel)" && python paa-orchestrator/html_report.py \
+  --findings <findings_file1> [<findings_file2> ...] \
+  --output "paa-orchestrator/reports/<scope-slug>-<YYYY-MM-DD>.html"
+```
+
+Where `<scope-slug>-<YYYY-MM-DD>` matches the Markdown report filename written in Step 5.
+
+If the reclassification agent returned findings inline but did not write a file,
+use Glob to locate the most recently modified JSON in `policy-reclassification/findings/`
+before calling the generator.
+
+On success, tell the user:
+> **HTML report ready:** `paa-orchestrator/reports/<scope-slug>-<YYYY-MM-DD>.html`
+> Open it in your browser for an interactive view of all findings and the remediation plan.
+
+If the generator fails (Python error, missing file), note it in the report as a
+"Report Generation Error" section and continue — the Markdown report is always the
+primary deliverable.
 
 ## Rules
 
 - Never skip a sub-agent step even if a previous output looks sufficient.
 - If a sub-agent returns an error, include an **Errors & Gaps** section in the report and continue with available data. Do not fabricate missing outputs.
+- Always include the **Errors & Gaps** section when `low_confidence_entries` is non-empty, even if no sub-agent failed. Low-confidence entries must never silently disappear from the report.
 - If the Historical Context Analyst reports `decision_store_count: 0`, note in the Executive Summary that no historical precedents exist yet and recommend the analyst run `/paa-record-decision` after this review.
 - If the Policy Reclassification Agent reports `rag_enabled: false` (fell back to built-in rules), note this in the Executive Summary and flag that findings may have lower confidence.
-- Permissions with `orchestrator_signal == "conflicting"` must appear in the dedicated **Conflicting Signals** section AND in the main Findings table.
+- Permissions with `orchestrator_signal == "conflicting"` must appear in the dedicated **Conflicting Signals** section AND in the main Findings table, with all three stakes framing fields populated.
+- Permissions with `orchestrator_signal == "policy_gap"` must appear in the **Permissions Without Policy Coverage** section. Do not count them in the Findings severity totals.
+- `strong_upgrade` may only be applied when the gate in Step 4b-ii is fully met (confirmed rule ≥ 0.75, high-confidence historical upgrade, normalization_confidence ≥ 0.70). Downgrade to `policy_upgrade` with a note if any condition fails.
+- The **Evaluation Metrics** section is mandatory in every report — even when no conflicts or gaps exist, the table documents analysis quality for trend tracking.
+- If `paa_store_status` returns fewer than 10 decisions with `orchestrator_signal` set, append this note to the Evaluation Metrics section: "Warning: fewer than 10 decisions have orchestrator_signal recorded — evidence-strength tracking may be inaccurate. Record decisions with orchestrator_signal via `/paa-record-decision` to improve coverage."
 - The report is the deliverable — keep your own narration outside the report terse.
 - Scope slug for file naming: lowercase, replace `:` `/` spaces with `-`, strip leading/trailing `-`.
