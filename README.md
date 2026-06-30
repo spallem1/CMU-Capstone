@@ -12,7 +12,72 @@ Orchestrator
   └─ Report (Markdown + HTML)
 ```
 
-Full diagram: `architecture.md`
+### Agent flow with RAG and MCP
+
+```mermaid
+flowchart TD
+    ANALYST(["IAM Analyst"])
+    TEAM(["Any Team Analyst\nClaude Code Session"])
+
+    ANALYST -->|"analyze permissions for Vendor X"| ORC
+
+    ORC["PAA Orchestrator\npaa-orchestrator.md"]
+
+    ORC -->|"Step 2 · sequential\nscope + vendor_urls"| PC
+    ORC -->|"Step 3 · parallel\nnormalized_file path"| PRA
+    ORC -->|"Step 3 · parallel\nnormalized_file path"| HCA
+
+    PC["Permission Collector\npermission-collector.md\n\nFetches from SaaS docs, cloud CLIs,\nor local IAM files.\nOutputs normalized permissions JSON."]
+
+    PC -->|"normalized_file"| ORC
+
+    subgraph RECLASSIFY["Policy-Driven Reclassification"]
+        PRA["policy-reclassification.md\n\nReads normalized_file.\nFor each permission, calls retriever.\nComputes reclassification direction + delta."]
+        PRET["retriever.py\nstdin: permission JSON\nstdout: matched rules JSON"]
+        PVS[("ChromaDB\npaa_policy_rules\n40 NIST/CSA rules")]
+
+        PRA -->|"subprocess per permission"| PRET
+        PRET -->|"cosine similarity query"| PVS
+        PVS -->|"top-K rules + scores"| PRET
+        PRET -->|"triggered rules + severity"| PRA
+    end
+
+    subgraph HISTORY["Historical Context Analyst"]
+        HCA["historical-context-analyst.md\n\nReads normalized_file.\nFor each permission, calls retriever.\nOutputs precedent hints + consensus."]
+        DRET["retriever.py\nstdin: permission JSON\nstdout: matched decisions JSON"]
+        DVS[("ChromaDB\npaa_analyst_decisions\n7+ analyst decisions")]
+
+        HCA -->|"subprocess per permission"| DRET
+        DRET -->|"cosine similarity query"| DVS
+        DVS -->|"top-K decisions + scores"| DRET
+        DRET -->|"matched decisions + consensus"| HCA
+    end
+
+    PRA -->|"findings JSON"| ORC
+    HCA -->|"analysis JSON"| ORC
+
+    ORC -->|"synthesises all three outputs"| RPT(["Report\npaa-orchestrator/reports/"])
+
+    subgraph MCP["MCP Server — mcp-server/server.py\nclaude mcp add paa python server.py"]
+        T1["paa_store_status\nrule + decision counts"]
+        T2["paa_retrieve_policy_rules\npermission_json → NIST/CSA rules"]
+        T3["paa_retrieve_decisions\npermission_json → past decisions"]
+        T4["paa_record_decision\nwrite decision + re-index"]
+    end
+
+    TEAM -->|"JSON-RPC stdio tool call"| T1
+    TEAM -->|"JSON-RPC stdio tool call"| T2
+    TEAM -->|"JSON-RPC stdio tool call"| T3
+    TEAM -->|"JSON-RPC stdio tool call"| T4
+
+    T2 -->|"subprocess"| PRET
+    T3 -->|"subprocess"| DRET
+    T1 -->|"count"| PVS
+    T1 -->|"count"| DVS
+    T4 -->|"appends + re-indexes"| DVS
+```
+
+Source: [`architecture.md`](architecture.md)
 
 ---
 
