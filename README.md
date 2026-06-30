@@ -16,6 +16,40 @@ Full diagram: `architecture.md`
 
 ---
 
+## Quick start
+
+```bash
+# 1. Clone and enter the project
+git clone https://github.com/spallem1/CMU-Capstone.git
+cd CMU-Capstone
+
+# 2. Install Python dependencies
+pip install -r policy-reclassification/rag/requirements.txt \
+            -r historical-context-analyst/rag/requirements.txt \
+            -r mcp-server/requirements.txt
+
+# 3. Launch Claude Code FROM THIS DIRECTORY
+claude
+```
+
+Then, **inside the Claude Code session** (not your shell):
+
+```
+/paa-index-policies      ← build the policy vector store (one time)
+/paa-index-decisions     ← seed the decision store from the bundled examples (one time)
+Run PAA for Okta         ← start an analysis
+```
+
+> ⚠️ **Where commands run matters.** Anything shown as a slash command (`/paa-…`)
+> or a natural-language prompt (`Run PAA for Okta`) is typed **into the Claude Code
+> session**, and only works when `claude` was launched from the project root — the
+> agents live in `.claude/agents/` and load only for this directory. Shell commands
+> (`git`, `cd`, `pip`) run in your terminal as usual.
+
+See [One-time setup](#one-time-setup) for details and the optional MCP server.
+
+---
+
 ## Prerequisites
 
 - Python 3.9+
@@ -25,6 +59,9 @@ Full diagram: `architecture.md`
 ---
 
 ## One-time setup
+
+> Steps 1 and 4 run in your **shell**. Steps 2 and 3 are slash commands typed
+> **inside a Claude Code session** that was launched from the project root.
 
 ### 1. Install Python dependencies
 
