@@ -96,7 +96,7 @@ decision_payload = {
     "analyst_final_rating": "CRITICAL",
     "override_direction": "confirmed",
     "rationale": "admin:org grants full org control; confirmed CRITICAL per dec-gh-001 precedent. JIT-only.",
-    "analyst": "spallem@gmail.com",
+    "analyst": "analyst@example.com",
     "vendor_rating": "HIGH",
     "policy_severity": "CRITICAL",
     "compensating_controls": ["JIT approval required", "MFA enforced", "Monthly audit-log review"],

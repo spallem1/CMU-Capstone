@@ -128,7 +128,7 @@ paa_record_decision({
   "decision": "escalate",
   "rationale": "Token revocation scope is org-wide — treat as HIGH regardless of vendor UNRATED.",
   "analyst_confidence": "high",
-  "analyst": "you@example.com",
+  "analyst": "analyst@example.com",
   "vendor_rating": "UNRATED",
   "policy_severity": "INFO",
   "orchestrator_signal": "conflicting"
