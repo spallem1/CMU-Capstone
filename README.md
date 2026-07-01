@@ -4,15 +4,34 @@ Multi-agent system that collects SaaS/cloud permissions, evaluates them against 
 
 ## Architecture
 
-```
-Orchestrator
-  └─ Permission Collector          fetches & normalises permissions
-  └─ Policy Reclassification  ─┐  per-permission, parallel pair
-  └─ Historical Context Analyst ┘
-  └─ Report (Markdown + HTML)
+### At a glance
+
+```mermaid
+flowchart TD
+    ANALYST(["IAM Analyst"])
+    REPORT(["Report<br/>Markdown + HTML"])
+
+    ANALYST -->|"Run PAA for a vendor"| ORC["PAA Orchestrator<br/>(coordinator)"]
+    REPORT --> ANALYST
+
+    ORC -->|"1 · collect"| PC["Permission Collector"]
+    ORC -->|"2 · classify"| POL["Policy Reclassification"]
+    ORC -->|"2 · precedents"| HIST["Historical Context Analyst"]
+    ORC -->|"3 · synthesise"| REPORT
+
+    PC --> ORC
+    POL --> ORC
+    HIST --> ORC
+
+    POL -.->|"NIST / CSA rules"| PVS[("Policy<br/>vector store")]
+    HIST -.->|"past decisions"| DVS[("Decision<br/>vector store")]
 ```
 
-### Agent flow with RAG and MCP
+The analyst kicks off the Orchestrator, which runs the Collector first, then the
+Policy and Historical agents together — each consulting its own vector store —
+and finally synthesises everything into the report.
+
+### Detailed agent flow with RAG and MCP
 
 ```mermaid
 flowchart TD
