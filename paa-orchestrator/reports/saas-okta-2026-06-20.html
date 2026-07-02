@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PAA Report — saas:okta</title>
+<style>
+:root {
+  --critical: #dc2626; --high: #ea580c; --medium: #ca8a04;
+  --low: #2563eb;      --info: #64748b; --compliant-c: #16a34a;
+  --bg: #f1f5f9; --surface: #ffffff; --border: #e2e8f0;
+  --text: #1e293b;     --muted: #64748b; --header-bg: #0f172a;
+  --radius: 10px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+       background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.6; }
+
+/* ── Header ── */
+header { background: var(--header-bg); color: #fff; padding: 28px 48px; }
+header h1 { font-size: 22px; font-weight: 700; letter-spacing: -.4px; }
+header h1 span { opacity: .45; font-weight: 400; font-size: 16px; margin-left: 10px; }
+.meta { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 24px; font-size: 13px; opacity: .65; }
+.meta strong { color: #fff; }
+
+/* ── Layout ── */
+main { max-width: 1200px; margin: 0 auto; padding: 36px 48px; }
+section { margin-bottom: 44px; }
+h2 { font-size: 17px; font-weight: 600; border-bottom: 2px solid var(--border);
+     padding-bottom: 10px; margin-bottom: 20px; }
+h2 .subtitle { font-size: 13px; font-weight: 400; color: var(--muted); margin-left: 8px; }
+
+/* ── Summary cards ── */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+         gap: 16px; margin-bottom: 40px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+        padding: 20px 22px; }
+.card .label { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+.card .value { font-size: 34px; font-weight: 700; margin-top: 4px; line-height: 1; }
+.c-critical .value { color: var(--critical); }
+.c-high     .value { color: var(--high); }
+.c-medium   .value { color: var(--medium); }
+.c-up       .value { color: var(--critical); }
+.c-ok       .value { color: var(--compliant-c); }
+
+/* ── Badges ── */
+.badge { display: inline-block; padding: 2px 8px; border-radius: 5px;
+         font-size: 11px; font-weight: 600; letter-spacing: .3px; white-space: nowrap; }
+.sev-critical { background:#fef2f2; color:var(--critical); border:1px solid #fecaca; }
+.sev-high     { background:#fff7ed; color:var(--high);     border:1px solid #fed7aa; }
+.sev-medium   { background:#fefce8; color:var(--medium);   border:1px solid #fef08a; }
+.sev-low      { background:#eff6ff; color:var(--low);      border:1px solid #bfdbfe; }
+.sev-info     { background:#f8fafc; color:var(--info);     border:1px solid #e2e8f0; }
+.sev-unrated  { background:#f8fafc; color:#94a3b8; border:1px dashed #cbd5e1; font-style:italic; }
+.conf-high   { background:#f0fdf4; color:var(--compliant-c); border:1px solid #bbf7d0; }
+.conf-medium { background:#fefce8; color:var(--medium);      border:1px solid #fef08a; }
+.conf-low    { background:#fef2f2; color:var(--critical);    border:1px solid #fecaca; }
+.gaps-section { border-top: 3px solid var(--medium); padding-top: 24px; margin-top: 8px; }
+.cls-violation  { background:#fef2f2; color:var(--critical); border:1px solid #fecaca; }
+.cls-privileged { background:#fff7ed; color:var(--high);     border:1px solid #fed7aa; }
+.cls-compliant  { background:#f0fdf4; color:var(--compliant-c); border:1px solid #bbf7d0; }
+.dir-up   { background:#fef2f2; color:var(--critical); border:1px solid #fecaca; }
+.dir-down { background:#f0fdf4; color:var(--compliant-c); border:1px solid #bbf7d0; }
+.dir-same { background:#f8fafc; color:var(--info); border:1px solid #e2e8f0; }
+
+/* ── Tables ── */
+.tbl-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; background: var(--surface); }
+th { background: #f8fafc; text-align: left; padding: 10px 14px;
+     font-size: 11px; font-weight: 600; text-transform: uppercase;
+     letter-spacing: .5px; color: var(--muted); border-bottom: 1px solid var(--border); }
+td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: #f8fafc; }
+
+/* ── Finding cards ── */
+.findings-toolbar { display: flex; gap: 8px; margin-bottom: 16px; }
+.btn { background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+       padding: 5px 14px; font-size: 12px; font-weight: 500; cursor: pointer;
+       color: var(--text); }
+.btn:hover { background: #f8fafc; }
+
+.finding { background: var(--surface); border: 1px solid var(--border);
+           border-radius: var(--radius); margin-bottom: 12px; overflow: hidden; }
+.finding[open] { border-color: #cbd5e1; }
+.finding summary { list-style: none; cursor: pointer; padding: 16px 20px;
+                   display: flex; align-items: flex-start; gap: 14px; }
+.finding summary::-webkit-details-marker { display: none; }
+.finding-chevron { color: var(--muted); font-size: 12px; margin-top: 2px;
+                   transition: transform .15s; flex-shrink: 0; }
+.finding[open] .finding-chevron { transform: rotate(90deg); }
+.finding-meta { flex: 1; min-width: 0; }
+.finding-id { font-family: ui-monospace, "SFMono-Regular", monospace;
+              font-size: 11px; color: var(--muted); }
+.finding-actions { font-size: 14px; font-weight: 600; margin-top: 2px;
+                   word-break: break-all; }
+.finding-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.finding-body { padding: 18px 20px; border-top: 1px solid var(--border); background: #fbfcfd; }
+
+/* border-left by severity */
+.finding.sev-critical { border-left: 4px solid var(--critical); }
+.finding.sev-high     { border-left: 4px solid var(--high); }
+.finding.sev-medium   { border-left: 4px solid var(--medium); }
+.finding.sev-low      { border-left: 4px solid var(--low); }
+.finding.sev-info     { border-left: 4px solid var(--info); }
+
+/* detail grid inside body */
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.detail-label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px;
+                color: var(--muted); margin-bottom: 3px; }
+.detail-value { font-size: 13px; }
+code { font-family: ui-monospace, "SFMono-Regular", monospace; font-size: 12px;
+       background: #f1f5f9; padding: 1px 5px; border-radius: 4px; word-break: break-all; }
+
+.rules-list { margin-top: 14px; }
+.rules-list h4 { font-size: 12px; font-weight: 600; text-transform: uppercase;
+                 letter-spacing: .5px; color: var(--muted); margin-bottom: 8px; }
+.rule-row { display: flex; align-items: center; gap: 8px; padding: 7px 0;
+            border-bottom: 1px solid var(--border); font-size: 12px; flex-wrap: wrap; }
+.rule-row:last-child { border-bottom: none; }
+.sim-score { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted);
+             min-width: 36px; }
+.rule-std { margin-left: auto; font-size: 11px; color: var(--muted); }
+
+.callout { margin-top: 14px; padding: 12px 14px; border-radius: 0 8px 8px 0;
+           font-size: 13px; line-height: 1.5; }
+.callout-why  { background: #fffbeb; border-left: 3px solid var(--medium); }
+.callout-fix  { background: #f0fdf4; border-left: 3px solid var(--compliant-c); }
+.callout strong { display: block; font-size: 11px; text-transform: uppercase;
+                  letter-spacing: .5px; margin-bottom: 4px; color: var(--muted); }
+
+/* ── Effort ── */
+.effort-low    { color: var(--compliant-c); font-weight: 600; }
+.effort-medium { color: var(--medium);      font-weight: 600; }
+.effort-high   { color: var(--critical);    font-weight: 600; }
+
+/* ── Notice ── */
+.notice { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px;
+          padding: 12px 16px; margin-bottom: 28px; font-size: 13px; }
+
+/* ── Footer ── */
+footer { background: var(--header-bg); color: rgba(255,255,255,.45);
+         text-align: center; font-size: 12px; padding: 18px; margin-top: 20px; }
+
+@media print {
+  .finding .finding-body { display: block !important; }
+  .findings-toolbar { display: none; }
+  .cards { grid-template-columns: repeat(5, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>PAA Permissions Analysis <span>saas:okta</span></h1>
+  <div class="meta">
+    <span>Date: <strong>2026-06-20</strong></span>
+    <span>Sources: <strong><code>saas_docs</code></strong></span>
+    <span>Policy corpus: <strong><code>CSA-CCM-V4-DSP</code> &middot; <code>CSA-CCM-V4-IAM</code> &middot; <code>CTRL-PLANE-001</code> &middot; <code>NIST-800-171-CUI</code> &middot; <code>NIST-800-207-ZTA</code> &middot; <code>NIST-800-53-AC</code></strong></span>
+    <span>RAG: <strong>enabled</strong></span>
+  </div>
+</header>
+
+<main>
+
+
+<!-- ── Summary cards ── -->
+<div class="cards">
+  <div class="card"><div class="label">Total Permissions</div><div class="value">144</div></div>
+  <div class="card c-critical"><div class="label">Critical</div><div class="value">0</div></div>
+  <div class="card c-high"><div class="label">High</div><div class="value">0</div></div>
+  <div class="card c-up"><div class="label">Upgraded by Policy</div><div class="value">0</div></div>
+  <div class="card c-ok"><div class="label">Compliant</div><div class="value">99</div></div>
+</div>
+
+<!-- ── Reclassification summary ── -->
+<section>
+  <h2>Reclassification Summary</h2>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Direction</th><th>Count</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="badge dir-up">↑ Upgraded</span></td>
+        <td><strong>0</strong></td>
+        <td>Vendor under-estimated risk — immediate analyst review needed</td>
+      </tr>
+      <tr>
+        <td><span class="badge dir-same">→ Unchanged</span></td>
+        <td><strong>144</strong></td>
+        <td>Vendor and policy agree on severity level</td>
+      </tr>
+      <tr>
+        <td><span class="badge dir-down">↓ Downgraded</span></td>
+        <td><strong>0</strong></td>
+        <td>Vendor was conservative — context suggests lower residual risk</td>
+      </tr>
+      <tr>
+        <td><span class="badge cls-compliant">Compliant</span></td>
+        <td><strong>99</strong></td>
+        <td>No NIST/CSA policy rules triggered at this scope</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:16px;">
+    <div class="card" style="padding:14px 18px">
+      <div class="label">Policy Violations</div>
+      <div class="value" style="font-size:24px;color:var(--critical)">0</div>
+    </div>
+    <div class="card" style="padding:14px 18px">
+      <div class="label">Over-Privileged</div>
+      <div class="value" style="font-size:24px;color:var(--high)">0</div>
+    </div>
+    <div class="card" style="padding:14px 18px">
+      <div class="label">Medium / Low</div>
+      <div class="value" style="font-size:24px;color:var(--medium)">45</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Findings ── -->
+<section>
+  <h2>Findings <span class="subtitle">(0 non-compliant — first 3 expanded)</span></h2>
+  <p style='color:var(--compliant-c);font-weight:600'>All permissions are compliant. No policy violations found.</p>
+</section>
+
+<!-- ── Remediation ── -->
+<section>
+  <h2>Prioritised Remediation Plan</h2>
+  
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>#</th><th>Action</th><th>Permissions</th><th>Standards</th><th>Effort</th></tr></thead>
+    <tbody><tr>
+          <td><strong>#1</strong></td>
+          <td>Extend the policy corpus with Okta-specific classification rules that match okta.*.manage scope patterns against CP-004 (access control modification), AC-6-002 (administrative privilege), and IAM-04-001 (privilege escalation) equivalents, then re-run this agent to produce confirmed findings.</td>
+          <td><code style="font-size:11px">okta-agentPools-manage-014, okta-apiTokens-manage-016, okta-appGrants-manage-018, okta-apps-manage-022, okta-authorizationServers-manage-026, okta-behaviors-manage-028, okta-botProtection-manage-030, okta-brands-manage-032, okta-captchas-manage-034, okta-directories-groups-manage-050, okta-domains-manage-052, okta-emailDomains-manage-056, okta-emailServers-manage-058, okta-eventHooks-manage-060, okta-features-manage-062, okta-groups-manage-064, okta-identitySources-manage-066, okta-idps-manage-068, okta-inlineHooks-manage-070, okta-linkedObjects-manage-072, okta-logStreams-manage-074, okta-networkZones-manage-077, okta-oauthIntegrations-manage-079, okta-orgs-manage-081, okta-policies-manage-085, okta-principalRateLimits-manage-087, okta-profileMappings-manage-089, okta-roles-manage-099, okta-schemas-manage-101, okta-securityEventsProviders-manage-103, okta-serviceAccounts-manage-105, okta-serviceAccounts-okta-manage-106, okta-serviceAccounts-okta-read-107, okta-sessions-manage-109, okta-ssf-manage-125, okta-templates-manage-111, okta-threatInsights-manage-113, okta-trustedOrigins-manage-115, okta-uischemas-manage-117, okta-userRisk-manage-119, okta-userTypes-manage-121, okta-userTypes-read-122, okta-apiTokens-read-017, okta-appGrants-read-019, okta-roles-read-100</code></td>
+          <td style="font-size:12px;color:var(--muted)">CP-004 &middot; AC-6-002 &middot; IAM-04-001 &middot; ZTA-005</td>
+          <td class="effort-medium">medium</td>
+        </tr><tr>
+          <td><strong>#2</strong></td>
+          <td>Integrate Okta System Log with a SIEM and alert on all 45 org-level admin/write/manage_permissions scope usage events. This directly addresses ZTA-005 (NIST SP 800-207 Section 3.5) which requires continuous monitoring of all control-plane principals.</td>
+          <td><code style="font-size:11px">okta-agentPools-manage-014, okta-apiTokens-manage-016, okta-appGrants-manage-018, okta-apps-manage-022, okta-authorizationServers-manage-026, okta-behaviors-manage-028, okta-botProtection-manage-030, okta-brands-manage-032, okta-captchas-manage-034, okta-directories-groups-manage-050, okta-domains-manage-052, okta-emailDomains-manage-056, okta-emailServers-manage-058, okta-eventHooks-manage-060, okta-features-manage-062, okta-groups-manage-064, okta-identitySources-manage-066, okta-idps-manage-068, okta-inlineHooks-manage-070, okta-linkedObjects-manage-072, okta-logStreams-manage-074, okta-networkZones-manage-077, okta-oauthIntegrations-manage-079, okta-orgs-manage-081, okta-policies-manage-085, okta-principalRateLimits-manage-087, okta-profileMappings-manage-089, okta-roles-manage-099, okta-schemas-manage-101, okta-securityEventsProviders-manage-103, okta-serviceAccounts-manage-105, okta-serviceAccounts-okta-manage-106, okta-serviceAccounts-okta-read-107, okta-sessions-manage-109, okta-ssf-manage-125, okta-templates-manage-111, okta-threatInsights-manage-113, okta-trustedOrigins-manage-115, okta-uischemas-manage-117, okta-userRisk-manage-119, okta-userTypes-manage-121, okta-userTypes-read-122, okta-apiTokens-read-017, okta-appGrants-read-019, okta-roles-read-100</code></td>
+          <td style="font-size:12px;color:var(--muted)">ZTA-005 &middot; NIST SP 800-207 Section 3.5</td>
+          <td class="effort-low">low</td>
+        </tr><tr>
+          <td><strong>#3</strong></td>
+          <td>Apply JIT (Just-In-Time) provisioning for the two collector-CRITICAL scopes (okta.clients.manage, okta.universalLogout.manage). These scopes allow management of OAuth clients org-wide and revocation of all active tokens — capabilities that should never be persistently granted. Use Okta Privileged Access or an external PAM tool to issue time-bounded grants with MFA step-up.</td>
+          <td><code style="font-size:11px">okta-clients-manage-oidc-006, okta-universalLogout-manage-009</code></td>
+          <td style="font-size:12px;color:var(--muted)">AC-6(5) &middot; IAM-04 &middot; ZTA-001</td>
+          <td class="effort-medium">medium</td>
+        </tr><tr>
+          <td><strong>#4</strong></td>
+          <td>Restrict okta.roles.manage, okta.realmAssignments.manage, and okta.appGrants.manage to a dedicated IAM-admin service principal with no other scopes granted. These scopes modify the permission boundary of other principals (manages_user_permissions=true) and are equivalent to IAM admin access. Require approval workflow before granting.</td>
+          <td><code style="font-size:11px">okta-roles-manage-099, okta-realmAssignments-manage-095, okta-appGrants-manage-018, okta-apiTokens-manage-016</code></td>
+          <td style="font-size:12px;color:var(--muted)">CP-004 &middot; IAM-04-001 &middot; AC-5-001 &middot; AC-6(5)</td>
+          <td class="effort-medium">medium</td>
+        </tr><tr>
+          <td><strong>#5</strong></td>
+          <td>Conduct a quarterly access review of all 58 collector-HIGH permissions to verify each is assigned to the minimum number of applications required. Use Okta Access Certifications to formally certify scope assignments against documented business need, satisfying IAM-05 (least privilege) and CSA CCM IAM-01 (documented justification).</td>
+          <td><code style="font-size:11px">okta-agentPools-manage-014, okta-apiTokens-manage-016, okta-appGrants-manage-018, okta-apps-manage-022, okta-authorizationServers-manage-026, okta-behaviors-manage-028, okta-botProtection-manage-030, okta-brands-manage-032, okta-captchas-manage-034, okta-directories-groups-manage-050, okta-domains-manage-052, okta-emailDomains-manage-056, okta-emailServers-manage-058, okta-eventHooks-manage-060, okta-features-manage-062, okta-groups-manage-064, okta-identitySources-manage-066, okta-idps-manage-068, okta-inlineHooks-manage-070, okta-linkedObjects-manage-072, okta-logStreams-manage-074, okta-networkZones-manage-077, okta-oauthIntegrations-manage-079, okta-orgs-manage-081, okta-policies-manage-085, okta-principalRateLimits-manage-087, okta-profileMappings-manage-089, okta-roles-manage-099, okta-schemas-manage-101, okta-securityEventsProviders-manage-103, okta-serviceAccounts-manage-105, okta-serviceAccounts-okta-manage-106, okta-serviceAccounts-okta-read-107, okta-sessions-manage-109, okta-ssf-manage-125, okta-templates-manage-111, okta-threatInsights-manage-113, okta-trustedOrigins-manage-115, okta-uischemas-manage-117, okta-userRisk-manage-119, okta-userTypes-manage-121, okta-userTypes-read-122</code></td>
+          <td style="font-size:12px;color:var(--muted)">IAM-01-001 &middot; IAM-05-001 &middot; AC-6</td>
+          <td class="effort-low">low</td>
+        </tr><tr>
+          <td><strong>#6</strong></td>
+          <td>Validate the collector's CRITICAL and HIGH ratings for the 19 resource-level admin scopes that returned policy_severity=INFO (downgraded). The policy corpus gap means INFO does not confirm low risk. Manually review okta.devices.manage, okta.dr.manage, okta.idps.manage equivalents at resource scope against NIST SP 800-207 ZTA principles of implicit deny and least-privilege access.</td>
+          <td><code style="font-size:11px">okta-clients-manage-oidc-006, okta-universalLogout-manage-009, okta-apps-interclientTrust-manage-020, okta-authenticators-manage-024, okta-clients-manage-036, okta-customTelephonyProvider-manage-038, okta-deviceAssurance-manage-040, okta-deviceIntegrations-manage-042, okta-devicePostureChecks-manage-044, okta-devicePostureChecksRelease-manage-046, okta-devices-manage-048, okta-dr-manage-054, okta-personal-adminSettings-manage-083, okta-pushProviders-manage-091, okta-rateLimits-manage-093, okta-realmAssignments-manage-095, okta-realms-manage-097, okta-users-manage-123, okta-workflows-invoke-manage-010</code></td>
+          <td style="font-size:12px;color:var(--muted)">ZTA-001 &middot; ZTA-002 &middot; AC-6 &middot; IAM-05-001</td>
+          <td class="effort-high">high</td>
+        </tr></tbody>
+  </table></div>
+</section>
+
+<!-- ── Compliant ── -->
+<section>
+  <h2>Compliant Permissions</h2>
+  
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>ID</th><th>Actions</th><th>Principal</th><th>Resource</th><th>Vendor Rating</th></tr></thead>
+    <tbody><tr>
+          <td><code>okta-agentPools-manage-014</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>agent pools</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-apiTokens-manage-016</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>API tokens</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-appGrants-manage-018</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>app grants</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-apps-manage-022</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>apps</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-authorizationServers-manage-026</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>authorization servers</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-behaviors-manage-028</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>behavior detection rules</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-botProtection-manage-030</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bot protection</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-brands-manage-032</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>brands and themes</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-captchas-manage-034</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>CAPTCHAs</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-directories-groups-manage-050</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>AD/LDAP groups</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-domains-manage-052</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>custom domains</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-emailDomains-manage-056</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>email domains</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-emailServers-manage-058</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>email servers</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-eventHooks-manage-060</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>event hooks</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-features-manage-062</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>features</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-groups-manage-064</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>groups</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-identitySources-manage-066</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>identity sources</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-idps-manage-068</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>identity providers</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-inlineHooks-manage-070</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>inline hooks</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-linkedObjects-manage-072</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>linked object definitions</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-logStreams-manage-074</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>log streams</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-networkZones-manage-077</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>network zones</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-oauthIntegrations-manage-079</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>API service integration instances</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-orgs-manage-081</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>organization</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-policies-manage-085</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>policies</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-principalRateLimits-manage-087</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>principal rate limits</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-profileMappings-manage-089</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>user profile mappings</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-roles-manage-099</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>roles</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-schemas-manage-101</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>schemas</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-securityEventsProviders-manage-103</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>security events providers</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-serviceAccounts-manage-105</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>service accounts</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-serviceAccounts-okta-manage-106</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>Okta managed user accounts</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-serviceAccounts-okta-read-107</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>Okta managed user accounts</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-sessions-manage-109</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>sessions</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-ssf-manage-125</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>Shared Signals Framework</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-templates-manage-111</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>custom templates</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-threatInsights-manage-113</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>ThreatInsight configurations</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-trustedOrigins-manage-115</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>trusted origins</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-uischemas-manage-117</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>UI schemas</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-userRisk-manage-119</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>user risk</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-userTypes-manage-121</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>user types</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-userTypes-read-122</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>user types</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-apiTokens-read-017</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>API tokens</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-appGrants-read-019</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>app grants</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-roles-read-100</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>roles</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-clients-manage-oidc-006</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.clients.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-universalLogout-manage-009</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.universalLogout.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-apps-interclientTrust-manage-020</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.apps.interclientTrust.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-authenticators-manage-024</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.authenticators.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-clients-manage-036</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.clients.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-customTelephonyProvider-manage-038</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.customTelephonyProvider.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-deviceAssurance-manage-040</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.deviceAssurance.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-deviceIntegrations-manage-042</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.deviceIntegrations.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-devicePostureChecks-manage-044</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.devicePostureChecks.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-devicePostureChecksRelease-manage-046</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.devicePostureChecksRelease.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-devices-manage-048</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.devices.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-dr-manage-054</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.dr.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-personal-adminSettings-manage-083</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.personal.adminSettings.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-pushProviders-manage-091</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.pushProviders.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-rateLimits-manage-093</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.rateLimits.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-realmAssignments-manage-095</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.realmAssignments.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-realms-manage-097</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.realms.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-users-manage-123</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.users.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-workflows-invoke-manage-010</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.workflows.invoke.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-device-sso-002</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>device_sso</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-offline-access-005</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>offline_access</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-clients-register-008</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.clients.register</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-realmAssignments-read-096</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.realmAssignments.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-myAccount-appAuthenticator-maintenance-manage-127</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.myAccount.appAuthenticator.maintenance.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-myAccount-appAuthenticator-manage-129</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.myAccount.appAuthenticator.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-myAccount-authenticators-manage-130</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.myAccount.authenticators.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-myAccount-email-manage-132</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.myAccount.email.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-myAccount-password-manage-136</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.myAccount.password.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-myAccount-phone-manage-138</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.myAccount.phone.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-myAccount-profile-manage-140</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.myAccount.profile.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-myAccount-sessions-manage-142</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.myAccount.sessions.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-myAccount-webauthn-manage-143</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.myAccount.webauthn.manage</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-address-001</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>address</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-email-003</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>email</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-groups-004</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>groups</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-openid-011</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>openid</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-phone-012</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>phone</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-profile-013</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>profile</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-agentPools-read-015</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.agentPools.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-apps-interclientTrust-read-021</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.apps.interclientTrust.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-apps-read-023</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.apps.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-authenticators-read-025</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.authenticators.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-authorizationServers-read-027</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.authorizationServers.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-behaviors-read-029</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.behaviors.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-botProtection-read-031</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.botProtection.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-brands-read-033</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.brands.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-captchas-read-035</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.captchas.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-clients-read-007</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.clients.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-clients-read-037</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.clients.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-customTelephonyProvider-read-039</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.customTelephonyProvider.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-deviceAssurance-read-041</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.deviceAssurance.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-deviceIntegrations-read-043</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.deviceIntegrations.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-devicePostureChecks-read-045</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.devicePostureChecks.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-devicePostureChecksRelease-read-047</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.devicePostureChecksRelease.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-devices-read-049</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.devices.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-directories-groups-read-051</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.directories.groups.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-domains-read-053</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.domains.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-dr-read-055</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.dr.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-emailDomains-read-057</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.emailDomains.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-emailServers-read-059</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.emailServers.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-eventHooks-read-061</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.eventHooks.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-features-read-063</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.features.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-groups-read-065</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.groups.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-identitySources-read-067</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.identitySources.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-idps-read-069</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.idps.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-inlineHooks-read-071</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.inlineHooks.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-linkedObjects-read-073</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.linkedObjects.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-logStreams-read-075</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.logStreams.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-logs-read-076</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.logs.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-networkZones-read-078</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.networkZones.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-oauthIntegrations-read-080</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.oauthIntegrations.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-orgs-read-082</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.orgs.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-personal-adminSettings-read-084</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.personal.adminSettings.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-policies-read-086</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.policies.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-principalRateLimits-read-088</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.principalRateLimits.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-profileMappings-read-090</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.profileMappings.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-pushProviders-read-092</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.pushProviders.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-rateLimits-read-094</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.rateLimits.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-realms-read-098</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.realms.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-schemas-read-102</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.schemas.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-securityEventsProviders-read-104</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.securityEventsProviders.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-serviceAccounts-read-108</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.serviceAccounts.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-sessions-read-110</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.sessions.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-ssf-read-126</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>ssf.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-templates-read-112</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.templates.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-threatInsights-read-114</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.threatInsights.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-trustedOrigins-read-116</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.trustedOrigins.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-uischemas-read-118</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.uischemas.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-userRisk-read-120</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.userRisk.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-users-read-124</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.users.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-myAccount-appAuthenticator-maintenance-read-128</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.myAccount.appAuthenticator.maintenance.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-myAccount-authenticators-read-131</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.myAccount.authenticators.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-myAccount-email-read-133</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.myAccount.email.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-myAccount-oktaApplications-read-134</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.myAccount.oktaApplications.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-myAccount-organization-read-135</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.myAccount.organization.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-myAccount-password-read-137</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.myAccount.password.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-myAccount-phone-read-139</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.myAccount.phone.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-myAccount-profile-read-141</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.myAccount.profile.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>okta-myAccount-webauthn-read-144</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>okta.myAccount.webauthn.read</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr></tbody>
+  </table></div>
+</section>
+
+
+
+</main>
+
+<footer>
+  Generated by PAA (Permissions Analyser Agent) &middot; 2026-06-20 16:14
+</footer>
+
+<script>
+function toggleAll(open) {
+  document.querySelectorAll('.finding').forEach(d => d.open = open);
+}
+</script>
+</body>
+</html>

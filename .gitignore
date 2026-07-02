@@ -1,5 +1,7 @@
 # Agent output directories (generated at runtime)
-paa-orchestrator/reports/
+# Reports: keep the HTML deliverables in git, ignore everything else (Markdown, etc.)
+paa-orchestrator/reports/*
+!paa-orchestrator/reports/*.html
 permission-collector/snapshots/
 policy-reclassification/findings/
 historical-context-analyst/analysis/

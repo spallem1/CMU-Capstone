@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PAA Report — saas:aws-s3</title>
+<style>
+:root {
+  --critical: #dc2626; --high: #ea580c; --medium: #ca8a04;
+  --low: #2563eb;      --info: #64748b; --compliant-c: #16a34a;
+  --bg: #f1f5f9; --surface: #ffffff; --border: #e2e8f0;
+  --text: #1e293b;     --muted: #64748b; --header-bg: #0f172a;
+  --radius: 10px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+       background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.6; }
+
+/* ── Header ── */
+header { background: var(--header-bg); color: #fff; padding: 28px 48px; }
+header h1 { font-size: 22px; font-weight: 700; letter-spacing: -.4px; }
+header h1 span { opacity: .45; font-weight: 400; font-size: 16px; margin-left: 10px; }
+.meta { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 24px; font-size: 13px; opacity: .65; }
+.meta strong { color: #fff; }
+
+/* ── Layout ── */
+main { max-width: 1200px; margin: 0 auto; padding: 36px 48px; }
+section { margin-bottom: 44px; }
+h2 { font-size: 17px; font-weight: 600; border-bottom: 2px solid var(--border);
+     padding-bottom: 10px; margin-bottom: 20px; }
+h2 .subtitle { font-size: 13px; font-weight: 400; color: var(--muted); margin-left: 8px; }
+
+/* ── Summary cards ── */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+         gap: 16px; margin-bottom: 40px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+        padding: 20px 22px; }
+.card .label { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+.card .value { font-size: 34px; font-weight: 700; margin-top: 4px; line-height: 1; }
+.c-critical .value { color: var(--critical); }
+.c-high     .value { color: var(--high); }
+.c-medium   .value { color: var(--medium); }
+.c-up       .value { color: var(--critical); }
+.c-ok       .value { color: var(--compliant-c); }
+
+/* ── Badges ── */
+.badge { display: inline-block; padding: 2px 8px; border-radius: 5px;
+         font-size: 11px; font-weight: 600; letter-spacing: .3px; white-space: nowrap; }
+.sev-critical { background:#fef2f2; color:var(--critical); border:1px solid #fecaca; }
+.sev-high     { background:#fff7ed; color:var(--high);     border:1px solid #fed7aa; }
+.sev-medium   { background:#fefce8; color:var(--medium);   border:1px solid #fef08a; }
+.sev-low      { background:#eff6ff; color:var(--low);      border:1px solid #bfdbfe; }
+.sev-info     { background:#f8fafc; color:var(--info);     border:1px solid #e2e8f0; }
+.sev-unrated  { background:#f8fafc; color:#94a3b8; border:1px dashed #cbd5e1; font-style:italic; }
+.conf-high   { background:#f0fdf4; color:var(--compliant-c); border:1px solid #bbf7d0; }
+.conf-medium { background:#fefce8; color:var(--medium);      border:1px solid #fef08a; }
+.conf-low    { background:#fef2f2; color:var(--critical);    border:1px solid #fecaca; }
+.gaps-section { border-top: 3px solid var(--medium); padding-top: 24px; margin-top: 8px; }
+.cls-violation  { background:#fef2f2; color:var(--critical); border:1px solid #fecaca; }
+.cls-privileged { background:#fff7ed; color:var(--high);     border:1px solid #fed7aa; }
+.cls-compliant  { background:#f0fdf4; color:var(--compliant-c); border:1px solid #bbf7d0; }
+.dir-up   { background:#fef2f2; color:var(--critical); border:1px solid #fecaca; }
+.dir-down { background:#f0fdf4; color:var(--compliant-c); border:1px solid #bbf7d0; }
+.dir-same { background:#f8fafc; color:var(--info); border:1px solid #e2e8f0; }
+
+/* ── Tables ── */
+.tbl-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; background: var(--surface); }
+th { background: #f8fafc; text-align: left; padding: 10px 14px;
+     font-size: 11px; font-weight: 600; text-transform: uppercase;
+     letter-spacing: .5px; color: var(--muted); border-bottom: 1px solid var(--border); }
+td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: #f8fafc; }
+
+/* ── Finding cards ── */
+.findings-toolbar { display: flex; gap: 8px; margin-bottom: 16px; }
+.btn { background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+       padding: 5px 14px; font-size: 12px; font-weight: 500; cursor: pointer;
+       color: var(--text); }
+.btn:hover { background: #f8fafc; }
+
+.finding { background: var(--surface); border: 1px solid var(--border);
+           border-radius: var(--radius); margin-bottom: 12px; overflow: hidden; }
+.finding[open] { border-color: #cbd5e1; }
+.finding summary { list-style: none; cursor: pointer; padding: 16px 20px;
+                   display: flex; align-items: flex-start; gap: 14px; }
+.finding summary::-webkit-details-marker { display: none; }
+.finding-chevron { color: var(--muted); font-size: 12px; margin-top: 2px;
+                   transition: transform .15s; flex-shrink: 0; }
+.finding[open] .finding-chevron { transform: rotate(90deg); }
+.finding-meta { flex: 1; min-width: 0; }
+.finding-id { font-family: ui-monospace, "SFMono-Regular", monospace;
+              font-size: 11px; color: var(--muted); }
+.finding-actions { font-size: 14px; font-weight: 600; margin-top: 2px;
+                   word-break: break-all; }
+.finding-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.finding-body { padding: 18px 20px; border-top: 1px solid var(--border); background: #fbfcfd; }
+
+/* border-left by severity */
+.finding.sev-critical { border-left: 4px solid var(--critical); }
+.finding.sev-high     { border-left: 4px solid var(--high); }
+.finding.sev-medium   { border-left: 4px solid var(--medium); }
+.finding.sev-low      { border-left: 4px solid var(--low); }
+.finding.sev-info     { border-left: 4px solid var(--info); }
+
+/* detail grid inside body */
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.detail-label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px;
+                color: var(--muted); margin-bottom: 3px; }
+.detail-value { font-size: 13px; }
+code { font-family: ui-monospace, "SFMono-Regular", monospace; font-size: 12px;
+       background: #f1f5f9; padding: 1px 5px; border-radius: 4px; word-break: break-all; }
+
+.rules-list { margin-top: 14px; }
+.rules-list h4 { font-size: 12px; font-weight: 600; text-transform: uppercase;
+                 letter-spacing: .5px; color: var(--muted); margin-bottom: 8px; }
+.rule-row { display: flex; align-items: center; gap: 8px; padding: 7px 0;
+            border-bottom: 1px solid var(--border); font-size: 12px; flex-wrap: wrap; }
+.rule-row:last-child { border-bottom: none; }
+.sim-score { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted);
+             min-width: 36px; }
+.rule-std { margin-left: auto; font-size: 11px; color: var(--muted); }
+
+.callout { margin-top: 14px; padding: 12px 14px; border-radius: 0 8px 8px 0;
+           font-size: 13px; line-height: 1.5; }
+.callout-why  { background: #fffbeb; border-left: 3px solid var(--medium); }
+.callout-fix  { background: #f0fdf4; border-left: 3px solid var(--compliant-c); }
+.callout strong { display: block; font-size: 11px; text-transform: uppercase;
+                  letter-spacing: .5px; margin-bottom: 4px; color: var(--muted); }
+
+/* ── Effort ── */
+.effort-low    { color: var(--compliant-c); font-weight: 600; }
+.effort-medium { color: var(--medium);      font-weight: 600; }
+.effort-high   { color: var(--critical);    font-weight: 600; }
+
+/* ── Notice ── */
+.notice { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px;
+          padding: 12px 16px; margin-bottom: 28px; font-size: 13px; }
+
+/* ── Footer ── */
+footer { background: var(--header-bg); color: rgba(255,255,255,.45);
+         text-align: center; font-size: 12px; padding: 18px; margin-top: 20px; }
+
+@media print {
+  .finding .finding-body { display: block !important; }
+  .findings-toolbar { display: none; }
+  .cards { grid-template-columns: repeat(5, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>PAA Permissions Analysis <span>saas:aws-s3</span></h1>
+  <div class="meta">
+    <span>Date: <strong>2026-07-02</strong></span>
+    <span>Sources: <strong><code>aws_iam</code></strong></span>
+    <span>Policy corpus: <strong><code>CSA-CCM-V4-DSP</code> &middot; <code>CSA-CCM-V4-IAM</code> &middot; <code>CTRL-PLANE-001</code> &middot; <code>NIST-800-171-CUI</code> &middot; <code>NIST-800-207-ZTA</code> &middot; <code>NIST-800-53-AC</code></strong></span>
+    <span>RAG: <strong>enabled</strong></span>
+  </div>
+</header>
+
+<main>
+
+
+<!-- ── Summary cards ── -->
+<div class="cards">
+  <div class="card"><div class="label">Total Permissions</div><div class="value">180</div></div>
+  <div class="card c-critical"><div class="label">Critical</div><div class="value">34</div></div>
+  <div class="card c-high"><div class="label">High</div><div class="value">48</div></div>
+  <div class="card c-up"><div class="label">Upgraded by Policy</div><div class="value">0</div></div>
+  <div class="card c-ok"><div class="label">Compliant</div><div class="value">94</div></div>
+</div>
+
+<!-- ── Reclassification summary ── -->
+<section>
+  <h2>Reclassification Summary</h2>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Direction</th><th>Count</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="badge dir-up">↑ Upgraded</span></td>
+        <td><strong>0</strong></td>
+        <td>Vendor under-estimated risk — immediate analyst review needed</td>
+      </tr>
+      <tr>
+        <td><span class="badge dir-same">→ Unchanged</span></td>
+        <td><strong>180</strong></td>
+        <td>Vendor and policy agree on severity level</td>
+      </tr>
+      <tr>
+        <td><span class="badge dir-down">↓ Downgraded</span></td>
+        <td><strong>0</strong></td>
+        <td>Vendor was conservative — context suggests lower residual risk</td>
+      </tr>
+      <tr>
+        <td><span class="badge cls-compliant">Compliant</span></td>
+        <td><strong>94</strong></td>
+        <td>No NIST/CSA policy rules triggered at this scope</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:16px;">
+    <div class="card" style="padding:14px 18px">
+      <div class="label">Policy Violations</div>
+      <div class="value" style="font-size:24px;color:var(--critical)">86</div>
+    </div>
+    <div class="card" style="padding:14px 18px">
+      <div class="label">Over-Privileged</div>
+      <div class="value" style="font-size:24px;color:var(--high)">0</div>
+    </div>
+    <div class="card" style="padding:14px 18px">
+      <div class="label">Medium / Low</div>
+      <div class="value" style="font-size:24px;color:var(--medium)">20</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Findings ── -->
+<section>
+  <h2>Findings <span class="subtitle">(0 non-compliant — first 3 expanded)</span></h2>
+  <p style='color:var(--compliant-c);font-weight:600'>All permissions are compliant. No policy violations found.</p>
+</section>
+
+<!-- ── Remediation ── -->
+<section>
+  <h2>Prioritised Remediation Plan</h2>
+  
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>#</th><th>Action</th><th>Permissions</th><th>Standards</th><th>Effort</th></tr></thead>
+    <tbody><tr>
+          <td><strong>#1</strong></td>
+          <td>Immediately review all permissions reclassified upward (policy severity exceeds collector baseline) and update IAM policies to add resource-level ARN conditions, eliminating any effective wildcard-resource grants.</td>
+          <td><code style="font-size:11px">aws-s3-delete-access-point-for-object-lambda-020, aws-s3-put-object-153, aws-s3-put-object-annotation-155, aws-s3-put-object-legal-hold-156, aws-s3-put-object-retention-157, aws-s3-put-object-tagging-158, aws-s3-put-object-version-tagging-161</code></td>
+          <td style="font-size:12px;color:var(--muted)">AC-6 &middot; ZTA-001 &middot; IAM-07</td>
+          <td class="effort-high">high</td>
+        </tr><tr>
+          <td><strong>#2</strong></td>
+          <td>Scope all CRITICAL permission-management actions (access grant creation, IAM Identity Center association, governance retention bypass) to dedicated IAM-admin roles with MFA conditions, approval workflows, and before/after diff logging on every change.</td>
+          <td><code style="font-size:11px">aws-s3-delete-access-point-for-object-lambda-020, aws-s3-associate-access-grants-identity-center-003, aws-s3-create-access-grant-005, aws-s3-create-access-grants-instance-006, aws-s3-create-access-grants-location-007, aws-s3-delete-access-grant-015, aws-s3-delete-access-grants-instance-016, aws-s3-delete-access-grants-instance-resource-policy-017, aws-s3-delete-access-grants-location-018, aws-s3-delete-access-point-019, aws-s3-delete-access-point-policy-021, aws-s3-delete-access-point-policy-for-object-lambda-022, aws-s3-delete-bucket-023, aws-s3-delete-bucket-metadata-table-configuration-024, aws-s3-delete-bucket-policy-025</code></td>
+          <td style="font-size:12px;color:var(--muted)">AC-6 &middot; AC-5 &middot; CP-004 &middot; IAM-04 &middot; ZTA-001</td>
+          <td class="effort-medium">medium</td>
+        </tr><tr>
+          <td><strong>#3</strong></td>
+          <td>Apply specific S3 resource ARN conditions (bucket name and object prefix) to all HIGH-severity write, delete, and replication operations to enforce micro-segmentation and limit blast radius.</td>
+          <td><code style="font-size:11px">aws-s3-put-object-153, aws-s3-put-object-annotation-155, aws-s3-put-object-legal-hold-156, aws-s3-put-object-retention-157, aws-s3-put-object-tagging-158, aws-s3-put-object-version-tagging-161, aws-s3-create-access-point-008, aws-s3-create-access-point-for-object-lambda-009, aws-s3-create-bucket-010, aws-s3-create-bucket-metadata-table-configuration-011, aws-s3-create-job-012, aws-s3-create-multi-region-access-point-013, aws-s3-create-storage-lens-group-014, aws-s3-initiate-replication-104, aws-s3-put-accelerate-configuration-125</code></td>
+          <td style="font-size:12px;color:var(--muted)">AC-6 &middot; CP-001 &middot; CP-002 &middot; ZTA-003 &middot; DSP-05</td>
+          <td class="effort-medium">medium</td>
+        </tr><tr>
+          <td><strong>#4</strong></td>
+          <td>Enable S3 Object Lock (governance or compliance mode) on all critical buckets and require the s3:x-amz-mfa condition key for all delete and BypassGovernanceRetention operations.</td>
+          <td><code style="font-size:11px">aws-s3-delete-access-point-for-object-lambda-020, aws-s3-delete-access-grant-015, aws-s3-delete-access-grants-instance-016, aws-s3-delete-access-grants-instance-resource-policy-017, aws-s3-delete-access-grants-location-018, aws-s3-delete-access-point-019, aws-s3-delete-access-point-policy-021, aws-s3-delete-access-point-policy-for-object-lambda-022, aws-s3-delete-bucket-023, aws-s3-delete-bucket-metadata-table-configuration-024, aws-s3-delete-bucket-policy-025, aws-s3-delete-bucket-website-026, aws-s3-delete-job-tagging-027, aws-s3-delete-multi-region-access-point-028, aws-s3-delete-object-029</code></td>
+          <td style="font-size:12px;color:var(--muted)">CP-003 &middot; ZTA-001 &middot; AC-17 &middot; CUI-3.1.5</td>
+          <td class="effort-low">low</td>
+        </tr><tr>
+          <td><strong>#5</strong></td>
+          <td>Enable CloudTrail S3 data events (read + write) for all buckets and integrate with a SIEM to alert on permission-management API calls (s3:PutBucketPolicy, s3:PutAccessControlPolicy, s3:CreateAccessGrant).</td>
+          <td><code style="font-size:11px"></code></td>
+          <td style="font-size:12px;color:var(--muted)">AC-2 &middot; IAM-14 &middot; ZTA-006 &middot; DSP-01</td>
+          <td class="effort-low">low</td>
+        </tr><tr>
+          <td><strong>#6</strong></td>
+          <td>Apply resource classification tags (data_class, CUI, sensitivity) to all S3 buckets to enable tag-conditioned policies and satisfy CSA CCM DSP-01 data governance requirements. Block untagged bucket creation via AWS Tag Policies.</td>
+          <td><code style="font-size:11px"></code></td>
+          <td style="font-size:12px;color:var(--muted)">DSP-01 &middot; DSP-03 &middot; IAM-01 &middot; CUI-3.1.1</td>
+          <td class="effort-medium">medium</td>
+        </tr><tr>
+          <td><strong>#7</strong></td>
+          <td>Conduct a quarterly IAM access review of all S3-scoped roles, pruning actions not exercised in the prior 90 days per AWS IAM Access Advisor data.</td>
+          <td><code style="font-size:11px"></code></td>
+          <td style="font-size:12px;color:var(--muted)">AC-2 &middot; IAM-07 &middot; IAM-01 &middot; DSP-01</td>
+          <td class="effort-medium">medium</td>
+        </tr></tbody>
+  </table></div>
+</section>
+
+<!-- ── Compliant ── -->
+<section>
+  <h2>Compliant Permissions</h2>
+  
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>ID</th><th>Actions</th><th>Principal</th><th>Resource</th><th>Vendor Rating</th></tr></thead>
+    <tbody><tr>
+          <td><code>aws-s3-delete-access-point-for-object-lambda-020</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>objectlambdaaccesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-object-153</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-object-annotation-155</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-object-legal-hold-156</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-object-retention-157</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-object-tagging-158</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-object-version-tagging-161</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-abort-multipart-upload-001</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-allow-vended-log-delivery-for-resource-002</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-bypass-governance-retention-004</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-describe-job-038</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>job</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-describe-multi-region-access-point-operation-039</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>multiregionaccesspointrequestarn</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-accelerate-configuration-041</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-access-grant-042</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrant</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-access-grants-instance-043</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrantsinstance</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-access-grants-instance-for-prefix-044</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrantsinstance</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-access-grants-instance-resource-policy-045</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrantsinstance</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-access-grants-location-046</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrantslocation</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-access-point-047</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>*</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-access-point-configuration-for-object-lambda-048</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>objectlambdaaccesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-access-point-for-object-lambda-049</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>objectlambdaaccesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-access-point-policy-050</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-access-point-policy-for-object-lambda-051</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>objectlambdaaccesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-access-point-policy-status-052</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-access-point-policy-status-for-object-lambda-053</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>objectlambdaaccesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-account-public-access-block-054</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>*</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-analytics-configuration-055</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-bucket-abac-056</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-bucket-acl-057</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspoint,bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-bucket-c-o-r-s-058</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspoint,bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-bucket-location-059</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspoint,bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-bucket-logging-060</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-bucket-metadata-table-configuration-061</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-bucket-notification-062</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspoint,bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-bucket-object-lock-configuration-063</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-bucket-ownership-controls-064</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-bucket-policy-065</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspoint,bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-bucket-policy-status-066</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-bucket-public-access-block-067</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-bucket-request-payment-068</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-bucket-tagging-069</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-bucket-versioning-070</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-bucket-website-071</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-data-access-072</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrantsinstance</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-encryption-configuration-073</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-intelligent-tiering-configuration-074</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-inventory-configuration-075</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-job-tagging-076</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>job</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-lifecycle-configuration-077</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-metrics-configuration-078</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-multi-region-access-point-079</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>multiregionaccesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-multi-region-access-point-policy-080</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>multiregionaccesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-multi-region-access-point-policy-status-081</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>multiregionaccesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-multi-region-access-point-routes-082</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>multiregionaccesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-replication-configuration-099</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-storage-lens-configuration-100</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>storagelensconfiguration</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-storage-lens-dashboard-102</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>storagelensconfiguration</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-storage-lens-group-103</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>storagelensgroup</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-list-access-grants-105</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrantsinstance</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-list-access-grants-instances-106</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>*</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-list-access-grants-locations-107</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrantsinstance</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-list-access-points-108</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>*</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-list-access-points-for-object-lambda-109</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>*</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-list-all-my-buckets-110</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>*</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-list-bucket-111</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspoint,bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-list-bucket-multipart-uploads-112</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-list-bucket-versions-113</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspoint,bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-list-caller-access-grants-114</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrantsinstance</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-list-jobs-115</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>*</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-list-multi-region-access-points-116</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>*</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-list-multipart-upload-parts-117</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-list-object-annotations-118</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-list-object-version-annotations-119</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-list-storage-lens-configurations-120</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>*</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-list-storage-lens-groups-121</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>*</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-object-owner-override-to-bucket-owner-123</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-pause-replication-124</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-access-point-policy-128</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-access-point-policy-for-object-lambda-129</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>objectlambdaaccesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-access-point-public-access-block-130</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>*</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-account-public-access-block-131</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>*</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-bucket-ownership-controls-139</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-object-acl-154</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-restore-object-169</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-submit-multi-region-access-point-routes-170</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>multiregionaccesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-associate-access-grants-identity-center-003</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrantsinstance</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-create-access-grant-005</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrantslocation</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-create-access-grants-instance-006</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrantsinstance</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-create-access-grants-location-007</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrantsinstance</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-delete-access-grant-015</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrant</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-delete-access-grants-instance-016</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrantsinstance</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-delete-access-grants-instance-resource-policy-017</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrantsinstance</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-delete-access-grants-location-018</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrantslocation</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-delete-access-point-019</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-delete-access-point-policy-021</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-delete-access-point-policy-for-object-lambda-022</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>objectlambdaaccesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-delete-bucket-023</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-delete-bucket-metadata-table-configuration-024</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-delete-bucket-policy-025</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-delete-bucket-website-026</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-delete-job-tagging-027</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>job</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-delete-multi-region-access-point-028</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>multiregionaccesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-delete-object-029</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-delete-object-annotation-030</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-delete-object-tagging-031</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-delete-object-version-032</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-delete-object-version-annotation-033</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-delete-object-version-tagging-034</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-delete-storage-lens-configuration-035</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>storagelensconfiguration</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-delete-storage-lens-configuration-tagging-036</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>storagelensconfiguration</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-delete-storage-lens-group-037</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>storagelensgroup</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-dissociate-access-grants-identity-center-040</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrantsinstance</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-access-grants-instance-resource-policy-126</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrantsinstance</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-bucket-acl-134</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-bucket-policy-140</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-bucket-public-access-block-141</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-replicate-delete-165</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-update-access-grants-location-173</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrantslocation</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-create-access-point-008</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-create-access-point-for-object-lambda-009</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>objectlambdaaccesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-create-bucket-010</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-create-bucket-metadata-table-configuration-011</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-create-job-012</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>*</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-create-multi-region-access-point-013</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>multiregionaccesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-create-storage-lens-group-014</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>*</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-initiate-replication-104</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-accelerate-configuration-125</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-access-point-configuration-for-object-lambda-127</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>objectlambdaaccesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-analytics-configuration-132</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-bucket-abac-133</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-bucket-c-o-r-s-135</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-bucket-logging-136</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-bucket-notification-137</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-bucket-object-lock-configuration-138</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-bucket-request-payment-142</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-bucket-tagging-143</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-bucket-versioning-144</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-bucket-website-145</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-encryption-configuration-146</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-intelligent-tiering-configuration-147</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-inventory-configuration-148</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-job-tagging-149</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>job</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-lifecycle-configuration-150</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-metrics-configuration-151</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-multi-region-access-point-policy-152</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>multiregionaccesspoint</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-object-version-acl-159</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-object-version-annotation-160</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-replication-configuration-162</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-storage-lens-configuration-163</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>*</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-put-storage-lens-configuration-tagging-164</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>storagelensconfiguration</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-replicate-object-166</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-replicate-object-annotation-167</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-tag-resource-171</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrant,accessgrantsinstance,accessgrantslocation,accesspoint,bucket,storagelensgroup</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-update-bucket-metadata-annotation-table-configuration-174</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-update-bucket-metadata-inventory-table-configuration-175</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-update-bucket-metadata-journal-table-configuration-176</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>bucket</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-update-job-priority-177</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>job</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-update-job-status-178</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>job</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-update-object-encryption-179</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-update-storage-lens-group-180</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>storagelensgroup</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-object-083</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-object-acl-084</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-object-annotation-085</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-object-attributes-086</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-object-legal-hold-087</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-object-retention-088</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-object-tagging-089</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-object-torrent-090</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-object-version-091</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-object-version-acl-092</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-object-version-annotation-093</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-object-version-annotation-for-replication-094</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-object-version-attributes-095</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-object-version-for-replication-096</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-object-version-tagging-097</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accesspointobject,object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-object-version-torrent-098</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-get-storage-lens-configuration-tagging-101</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>storagelensconfiguration</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-list-tags-for-resource-122</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrant,accessgrantsinstance,accessgrantslocation,accesspoint,bucket,storagelensgroup</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-replicate-tags-168</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>object</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr><tr>
+          <td><code>aws-s3-untag-resource-172</code></td>
+          <td></td>
+          <td><code>*</code></td>
+          <td><code>accessgrant,accessgrantsinstance,accessgrantslocation,accesspoint,bucket,storagelensgroup</code></td>
+          <td><span class="badge sev-info">INFO</span></td>
+        </tr></tbody>
+  </table></div>
+</section>
+
+
+
+</main>
+
+<footer>
+  Generated by PAA (Permissions Analyser Agent) &middot; 2026-07-01 23:40
+</footer>
+
+<script>
+function toggleAll(open) {
+  document.querySelectorAll('.finding').forEach(d => d.open = open);
+}
+</script>
+</body>
+</html>
